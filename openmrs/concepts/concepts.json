@@ -1,0 +1,52 @@
+{
+  "$comment": "Replayable manifest of FIB-4 risk-stratification orderable concepts. Used by openmrs/scripts/seed-concepts.sh against a fresh OpenMRS instance.",
+  "datatypes": {
+    "n_a": "8d4a4c94-c2cc-11de-8d13-0010c6dffd0f"
+  },
+  "concept_classes": {
+    "procedure":  "8d490bf4-c2cc-11de-8d13-0010c6dffd0f",
+    "labset":     "8d492026-c2cc-11de-8d13-0010c6dffd0f",
+    "misc_order": "8d492ee0-c2cc-11de-8d13-0010c6dffd0f"
+  },
+  "sources": {
+    "loinc": "6ADDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"
+  },
+  "map_types": {
+    "same_as": "35543629-7d8c-11e1-909d-c80aa9edcf4e"
+  },
+  "concepts": [
+    {
+      "key": "vcte",
+      "uuid": "cb9450cf-bb90-4600-9116-b7c1ab8ee5b3",
+      "fully_specified_name": "FibroScan (VCTE)",
+      "short_name": "FibroScan",
+      "description": "FibroScan (VCTE) (orderable for MASLD/MASH workflow)",
+      "concept_class": "procedure",
+      "datatype": "n_a",
+      "loinc_code": "79961-7",
+      "loinc_name": "Liver stiffness by Vibration controlled transient elastography"
+    },
+    {
+      "key": "elf",
+      "uuid": "cd75cf42-ef4b-4d15-9ea4-ea12eca9e568",
+      "fully_specified_name": "Enhanced Liver Fibrosis (ELF) blood panel",
+      "short_name": "ELF panel",
+      "description": "Enhanced Liver Fibrosis (ELF) blood panel (orderable for MASLD/MASH workflow)",
+      "concept_class": "labset",
+      "datatype": "n_a",
+      "loinc_code": "95942-6",
+      "loinc_name": "Enhanced Liver Fibrosis (ELF) score panel"
+    },
+    {
+      "key": "consult",
+      "uuid": "f682c646-b597-4cd4-8282-4191e0eb040b",
+      "fully_specified_name": "Gastroenterology / Hepatology consult",
+      "short_name": "GI/Hep consult",
+      "description": "Gastroenterology / Hepatology consult (orderable for MASLD/MASH workflow)",
+      "concept_class": "misc_order",
+      "datatype": "n_a",
+      "loinc_code": null,
+      "loinc_name": null
+    }
+  ]
+}
