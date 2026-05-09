@@ -1,4 +1,29 @@
+# Dependencies / build output
 node_modules/
 dist/
+build/
+
+# OS / IDE
 .DS_Store
+.idea/
+.vscode/
+*.swp
 *.local
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Never commit at repo root: PDFs, screenshots, scratch images
+/*.pdf
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/Screenshot*
+
+# Allow committed images only under docs/
+!docs/*.png
+!docs/*.svg
+!docs/*.jpg
