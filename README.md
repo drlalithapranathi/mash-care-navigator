@@ -1,6 +1,6 @@
 # MASH Care Navigator
 
-![Clinical Workflow](canvas-image.png)
+![Clinical Workflow](docs/clinical-workflow.png)
 
 ## Problem
 FIB-4 screening gets missed. High-risk MASLD patients don't get flagged in time.
