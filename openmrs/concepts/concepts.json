@@ -1,10 +1,13 @@
 {
-  "$comment": "Replayable manifest of FIB-4 risk-stratification orderable concepts. Used by openmrs/scripts/seed-concepts.sh against a fresh OpenMRS instance.",
+  "$comment": "Replayable manifest of concepts the MASH Care Navigator app needs in OpenMRS. Used by openmrs/scripts/seed-concepts.sh. Entries with `existing_uuid` are pre-existing concepts that only need a LOINC mapping; entries with `uuid` are concepts to create with that explicit UUID.",
   "datatypes": {
-    "n_a": "8d4a4c94-c2cc-11de-8d13-0010c6dffd0f"
+    "n_a":     "8d4a4c94-c2cc-11de-8d13-0010c6dffd0f",
+    "numeric": "8d4a4488-c2cc-11de-8d13-0010c6dffd0f"
   },
   "concept_classes": {
+    "test":       "8d4907b2-c2cc-11de-8d13-0010c6dffd0f",
     "procedure":  "8d490bf4-c2cc-11de-8d13-0010c6dffd0f",
+    "finding":    "8d491a9a-c2cc-11de-8d13-0010c6dffd0f",
     "labset":     "8d492026-c2cc-11de-8d13-0010c6dffd0f",
     "misc_order": "8d492ee0-c2cc-11de-8d13-0010c6dffd0f"
   },
@@ -47,6 +50,24 @@
       "datatype": "n_a",
       "loinc_code": null,
       "loinc_name": null
+    },
+    {
+      "key": "hba1c",
+      "existing_uuid": "b1c56e95-075a-47f3-8712-100c4d9efe1d",
+      "fully_specified_name": "Glycosylated Hemoglobin",
+      "loinc_code": "4548-4",
+      "loinc_name": "Hemoglobin A1c/Hemoglobin.total in Blood"
+    },
+    {
+      "key": "bmi",
+      "uuid": "4448c907-7fed-416c-9871-541b6c3b72b1",
+      "fully_specified_name": "Body Mass Index",
+      "short_name": "BMI",
+      "description": "Body Mass Index (kg/m^2) — derived from height and weight; used in MASLD risk assessment.",
+      "concept_class": "finding",
+      "datatype": "numeric",
+      "loinc_code": "39156-5",
+      "loinc_name": "Body mass index (BMI) [Ratio]"
     }
   ]
 }
