@@ -105,7 +105,7 @@ export default function App({ client }) {
         <div className="text-center text-xs text-slate-400 pt-2 pb-6">
           MASH Care Navigator · SMART on FHIR R4 · Client ID: e1059be6-b584-4400-8111-d413ec15f7a9
           <br />
-          Clinical Champion: Dr. Niharika Samala, MD · Developer: Lalitha Pranathi Pulavarthy, BDS ·
+          Clinical Champion: Dr. Niharika Samala, MD · Developer: Lalitha Pranathi Pulavarthy, BDS, MS ·
           Advisor: Dr. Saptarshi Purkayastha, PhD
         </div>
       </main>

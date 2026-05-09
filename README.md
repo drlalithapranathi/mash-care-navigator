@@ -53,5 +53,5 @@ docker compose -f openmrs/deploy/docker-compose.yml up -d
 
 ## Credits
 - Clinical Champion: Dr. Niharika Samala, MD
-- Developer: Lalitha Pranathi Pulavarthy, BDS
+- Developer: Lalitha Pranathi Pulavarthy, BDS, MS
 - Advisor: Dr. Saptarshi Purkayastha, PhD
