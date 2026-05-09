@@ -46,16 +46,16 @@ services:
       --max_allowed_packet=64M
       --innodb_buffer_pool_size=1G
     environment:
-      MYSQL_DATABASE: ${MYSQL_DB:-openmrs}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Admin123}
-      MYSQL_USER: ${MYSQL_USER:-openmrs}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-Admin123}
+      MYSQL_DATABASE: ${MYSQL_DB:?set MYSQL_DB in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
     volumes:
       - db-data:/var/lib/mysql
     networks:
       - openmrs-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-Admin123}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -68,16 +68,16 @@ services:
       db:
         condition: service_healthy
     environment:
-      DB_DATABASE: ${MYSQL_DB:-openmrs}
+      DB_DATABASE: ${MYSQL_DB}
       DB_HOST: db
-      DB_USERNAME: ${MYSQL_USER:-openmrs}
-      DB_PASSWORD: ${MYSQL_PASSWORD:-Admin123}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
       DB_CREATE_TABLES: "true"
       DB_AUTO_UPDATE: "true"
-      VIRTUAL_HOST: ${VIRTUAL_HOST}
+      VIRTUAL_HOST: ${VIRTUAL_HOST:?set VIRTUAL_HOST in .env}
       VIRTUAL_PORT: 8080
       LETSENCRYPT_HOST: ${VIRTUAL_HOST}
-      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:?set LETSENCRYPT_EMAIL in .env}
       JAVA_OPTS: >-
         -Xmx2g
         -Xms1g
