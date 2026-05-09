@@ -3,7 +3,7 @@
 Clinical decision support for MASLD / MASH screening and risk stratification —
 delivered at the point of care via SMART-on-FHIR and EHR-native widgets.
 
-![Clinical Workflow](docs/clinical-workflow.png)
+![Architecture and Clinical Workflow](docs/architecture-and-workflow.png)
 
 ## Problem
 FIB-4 screening gets missed. High-risk MASLD patients don't get flagged in
