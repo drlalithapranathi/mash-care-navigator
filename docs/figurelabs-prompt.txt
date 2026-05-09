@@ -1,0 +1,116 @@
+Generate a single landscape figure titled "MASH Care Navigator — System Architecture & Clinical Workflow". Lay it out in two halves side by side: the left half is a system-architecture stack, the right half is the clinical decision flow. Use a clean, flat, technical-poster style with rounded boxes, soft drop shadows, thin connector arrows with small labels, and an unobtrusive grid background. Color palette: blue for infrastructure, teal for OpenMRS modules, amber for clinical risk, red for high risk, green for low risk, gray for storage.
+
+==============================
+LEFT HALF — SYSTEM ARCHITECTURE
+==============================
+
+Title for this half: "System Architecture".
+
+Stack from top to bottom, with arrows showing request flow:
+
+1. "Clinician's Browser" (icon: monitor). Below it the dashboard widget (a small mockup card titled "FIB-4 Screening Widget"). The widget calls the OpenMRS REST API.
+
+2. "nginx-proxy + Let's Encrypt (acme-companion)" — TLS termination layer. Label the arrow into it: "HTTPS".
+
+3. "Apache Tomcat 8" — servlet container. Label: "Docker container 'openmrs-app'".
+
+4. "OpenMRS WAR (Reference Application 2.x demo distro)". Inside this WAR, draw the following sub-modules as nested boxes:
+   - "UI Framework + AppFramework"
+   - "REST Web Services (/ws/rest/v1)"
+   - "FHIR2 Module (R4 endpoints)"
+   - "coreapps OMOD" with a child box labeled "fib4screening.gsp (Dashboard widget)" — highlight this box with a thin amber border to show it's the patched fragment
+   - "OWA Module" with a child box labeled "mashmasld OWA (full screening app)"
+   - "Other OMOD modules" (smaller, faded)
+
+5. "MySQL 5.6 Database" — Docker container 'openmrs-db'. Show a few key tables as small chips inside it: "concept", "concept_reference_term", "concept_reference_map", "obs", "encounter", "orders", "visit", "person".
+
+6. To the right of the WAR, draw a separate "Concept Dictionary" panel. Inside it, list the seeded concepts the app depends on, grouped:
+   - Observation concepts (existing, with LOINC mappings now seeded):
+       • Glycosylated Hemoglobin · LOINC 4548-4
+       • Body Mass Index · LOINC 39156-5
+       • AST, ALT, Platelet count (already mapped)
+   - Orderable concepts (newly seeded for FIB-4 risk pathway):
+       • FibroScan (VCTE) · Procedure · LOINC 79961-7
+       • Enhanced Liver Fibrosis (ELF) blood panel · LabSet · LOINC 95942-6
+       • Gastroenterology / Hepatology consult · Misc Order
+
+7. Below the architecture, show two devops elements:
+   - "docker-compose.yml" file icon, with a small arrow labeled "brings up stack".
+   - "seed-concepts.sh + concepts.json (manifest)" with an arrow into the Concept Dictionary, labeled "POST /ws/rest/v1/concept (idempotent replay)".
+
+Add a small inset legend at the bottom-left showing the color → meaning mapping.
+
+==============================
+RIGHT HALF — CLINICAL WORKFLOW
+==============================
+
+Title for this half: "Clinical Workflow — FIB-4 Risk Stratification (age-adjusted)".
+
+The workflow starts at the top with: "Patient opens in clinician dashboard". Draw a single starting node, then split into three vertical swim-lanes labeled "Flow A · Patient has labs", "Flow B · Patient missing labs", and "Flow C · Risk-level follow-up actions". The dashboard widget decides which lane to render at a glance.
+
+------------------------------
+Flow A — Patient HAS labs (AST + ALT + Platelets present within 12 months)
+------------------------------
+
+Sequence of boxes top-to-bottom, with arrows:
+
+1. "GET /ws/rest/v1/obs?patient=<uuid>"  →  AST, ALT, Platelets fetched.
+2. "Calculate FIB-4 = (age × AST) / (Platelets × √ALT)".
+3. "Apply age-adjusted thresholds (AGA Clinical Care Pathway / AASLD / McPherson 2017)":
+       • Age < 65 → low cutoff = 1.3, upper = 2.67
+       • Age ≥ 65 → low cutoff = 2.0, upper = 2.67  (highlight this — it's the age-adjusted rule)
+4. "Render risk badge in the widget": a tri-color bar with a needle (green LOW < lower, amber INTERMEDIATE lower–2.67, red HIGH > 2.67).
+5. Arrow forks to "Flow C — risk-level follow-up actions".
+
+------------------------------
+Flow B — Patient MISSING labs
+------------------------------
+
+1. "GET /ws/rest/v1/obs" returns missing AST/ALT/Platelets.
+2. Widget shows: "Missing Labs — AST, ALT, Platelet Count" + button "⊕ Order Missing Labs".
+3. On click: chain "GET /session → GET /provider?user=… → GET /visit?patient=… (create if absent) → POST /encounter" with order objects:
+       • CBC (Complete Blood Count) — covers Platelets
+       • Hepatic Function Panel — covers AST + ALT
+4. Encounter with type "Visit Note" is posted with the orders. Widget updates to "✓ Orders placed — awaiting results".
+5. Arrow loops back to Flow A on next encounter (when labs come back).
+
+------------------------------
+Flow C — Risk-level follow-up actions (NEW)
+------------------------------
+
+This swim-lane is the new behavior added to the widget. Draw three side-by-side branches based on FIB-4 risk category:
+
+🟢 LOW (FIB-4 < 1.3, or < 2.0 if age ≥ 65)
+    → "Continue standard care · rescreen in 2–3 years". No action needed.
+
+🟡 INTERMEDIATE (FIB-4 1.3–2.67, or 2.0–2.67 if age ≥ 65)
+    → Widget renders TWO real "Place Order" action rows:
+         • FibroScan (VCTE) — LOINC 79961-7
+         • Enhanced Liver Fibrosis (ELF) — LOINC 95942-6
+    → Click any row: same encounter-POST flow as Flow B (session → provider → visit → POST /encounter with a single test order for that concept).
+    → After click, row updates to "✓ Ordered — awaiting result". If an active order already exists, the row instead shows "Already ordered — Awaiting result" without the button.
+
+🔴 HIGH (FIB-4 > 2.67, all ages)
+    → Widget renders ONE real "Place Order" action row:
+         • Gastroenterology / Hepatology consult (Misc Order class).
+    → Same POST /encounter mechanism. Row state cycles: idle → "Place Order" → "Ordered" or "Already ordered — Awaiting result".
+
+------------------------------
+Cross-flow callouts (place as small labeled badges on the diagram)
+------------------------------
+
+- "Order POST contract": for every order, include the Test Order order_type, Outpatient careSetting, Visit Note encounterType, current visit (created if none active), and current provider (resolved from /session → /provider?user=).
+- "Idempotency": each "Place Order" row first calls GET /order?patient=…&concept=… and, if an active order exists, replaces the button with an "Already ordered" badge. Prevents duplicate orders on widget reloads.
+- "Source of truth": small label "concepts/concepts.json + seed-concepts.sh in repo — the dictionary on a fresh OpenMRS server is reproduced from this manifest, not hand-edited".
+- "Standards alignment": small label "FIB-4 thresholds per AGA Clinical Care Pathway and AASLD MASLD Practice Guidance (age-adjusted ≥65 → 2.0)".
+
+==============================
+GENERAL STYLE NOTES
+==============================
+
+- Keep all text in a clean sans-serif (e.g. Inter, IBM Plex Sans).
+- Rounded corners on every box (8 px radius).
+- Use icons sparingly: monitor for browser, lock for HTTPS, container/whale for Docker, database cylinder for MySQL, stethoscope for the patient/clinical side, lab-flask for orders, person silhouette for provider.
+- Risk colors: green #2e7d32, amber #e65100, red #c62828.
+- Keep the figure readable at half-page width.
+- Render in landscape, ~1600×900 px.
