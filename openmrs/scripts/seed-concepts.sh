@@ -62,11 +62,15 @@ post_concept () {
     return 0
   fi
 
+  local concept_uuid=$(resolve ".concepts[] | select(.key==\"$key\") | .uuid")
+
   local body
   body=$(jq -n \
+    --arg uuid "$concept_uuid" \
     --arg fsn "$fsn" --arg short "$short" --arg desc "$desc" \
     --arg dt "$DT_NA" --arg cc "$class_uuid" \
     '{
+      uuid: $uuid,
       names: [
         {name:$fsn,   locale:"en", localePreferred:true, conceptNameType:"FULLY_SPECIFIED"},
         {name:$short, locale:"en", conceptNameType:"SHORT"}
