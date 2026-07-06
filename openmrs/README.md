@@ -6,9 +6,11 @@ Application 2.x:
 - **`widget/fib4screening.gsp`** — the FIB-4 dashboard widget GSP, patched
   into `coreapps-1.34.0.omod` at
   `web/module/fragments/dashboardwidgets/fib4screening.gsp`.
-- **`concepts/concepts.json`** — manifest of the three orderable concepts
-  the widget posts: FibroScan (VCTE), Enhanced Liver Fibrosis (ELF), and
-  Gastroenterology / Hepatology consult, with LOINC mappings.
+- **`concepts/concepts.json`** — manifest of the concepts the widget relies
+  on: the three orderables it posts (FibroScan (VCTE), Enhanced Liver
+  Fibrosis (ELF), Gastroenterology / Hepatology consult) plus the HbA1c
+  LOINC mapping and the BMI concept used in risk assessment, with LOINC
+  mappings.
 - **`deploy/docker-compose.yml`** — full stack: nginx-proxy + acme-companion +
   MySQL 5.6 + OpenMRS RefApp distro.
 - **`deploy/repack-omod.py`** — rebuilds the coreapps OMOD with a replaced
@@ -34,7 +36,9 @@ a fresh DB) before going to the next step.
 ## Seed the orderable concepts
 
 The widget posts test orders against three concepts that don't ship with
-the RefApp distro. Seed them once per fresh server:
+the RefApp distro; the manifest also adds a LOINC mapping to the distro's
+existing HbA1c concept and creates a numeric BMI concept. Seed once per
+fresh server:
 
 ```sh
 set -a; source openmrs/.env; set +a
@@ -112,3 +116,5 @@ concepts are created with explicit UUIDs so they stay stable across rebuilds).
 | FibroScan (VCTE)                         | `cb9450cf-bb90-4600-9116-b7c1ab8ee5b3` | 79961-7  |
 | Enhanced Liver Fibrosis (ELF) blood panel| `cd75cf42-ef4b-4d15-9ea4-ea12eca9e568` | 95942-6  |
 | Gastroenterology / Hepatology consult    | `f682c646-b597-4cd4-8282-4191e0eb040b` | —        |
+| Glycosylated Hemoglobin (existing distro concept, mapping added) | `b1c56e95-075a-47f3-8712-100c4d9efe1d` | 4548-4 |
+| Body Mass Index                          | `4448c907-7fed-416c-9871-541b6c3b72b1` | 39156-5  |
