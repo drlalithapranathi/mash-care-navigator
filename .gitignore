@@ -2,6 +2,9 @@
 node_modules/
 dist/
 build/
+*.log
+npm-debug.log*
+coverage/
 
 # OS / IDE
 .DS_Store
@@ -10,13 +13,24 @@ build/
 *.swp
 *.local
 
-# Secrets / env
+# Claude Code scratch/drop-zone — never commit
+.claude/
+
+# Secrets / env / keys
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+id_rsa*
 
-# Never commit at repo root: PDFs, screenshots, scratch images
-/*.pdf
+# Never commit anywhere: PDFs and Office docs (reference/study material)
+*.pdf
+*.docx
+*.doc
+*.pptx
+
+# Never commit at repo root: screenshots, scratch images
 /*.png
 /*.jpg
 /*.jpeg
