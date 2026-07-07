@@ -192,15 +192,26 @@ jq(function(){
         });
     }
 
-    // --- Step 1: Fetch latest obs for this patient ---
-    jq.getJSON(base + "/obs?patient=" + patientUuid + "&v=full&limit=50", function(data){
-        var obs = data.results || [];
-        var ast=null, alt=null, plat=null;
-        obs.forEach(function(o){
-            if(o.concept.uuid === UUIDS.AST  && !ast)  ast  = o.value;
-            if(o.concept.uuid === UUIDS.ALT  && !alt)  alt  = o.value;
-            if(o.concept.uuid === UUIDS.PLAT && !plat) plat = o.value;
+    // --- Step 1: Fetch the latest AST / ALT / platelets, querying by concept so
+    // the newest value is found even on charts with many observations (issue #9). ---
+    function pickLatestObsValue(resp){
+        var results = (resp && resp[0] && resp[0].results) ? resp[0].results : [];
+        var latest = null;
+        results.forEach(function(o){
+            if(o.value == null || o.voided) return;
+            if(!latest || new Date(o.obsDatetime) > new Date(latest.obsDatetime)) latest = o;
         });
+        return latest ? latest.value : null;
+    }
+
+    jq.when(
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.AST  + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ALT  + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.PLAT + "&v=full")
+    ).done(function(astResp, altResp, platResp){
+        var ast  = pickLatestObsValue(astResp);
+        var alt  = pickLatestObsValue(altResp);
+        var plat = pickLatestObsValue(platResp);
 
         var el = jq("#fib4-screening-widget");
 
