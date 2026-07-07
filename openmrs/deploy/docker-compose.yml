@@ -72,8 +72,11 @@ services:
       DB_HOST: db
       DB_USERNAME: ${MYSQL_USER}
       DB_PASSWORD: ${MYSQL_PASSWORD}
-      DB_CREATE_TABLES: "true"
-      DB_AUTO_UPDATE: "true"
+      # Gateable for controlled upgrades: after first provisioning, set
+      # DB_AUTO_UPDATE=false in .env and flip it on only for a backed-up upgrade
+      # (snapshot with scripts/backup-db.sh first). Defaults preserve first-boot.
+      DB_CREATE_TABLES: "${DB_CREATE_TABLES:-true}"
+      DB_AUTO_UPDATE: "${DB_AUTO_UPDATE:-true}"
       VIRTUAL_HOST: ${VIRTUAL_HOST:?set VIRTUAL_HOST in .env}
       VIRTUAL_PORT: 8080
       LETSENCRYPT_HOST: ${VIRTUAL_HOST}
@@ -88,6 +91,14 @@ services:
     networks:
       - proxy-net
       - openmrs-net
+    healthcheck:
+      # So the proxy stops routing to a wedged/booting app. start_period is
+      # generous for the slow first-boot Liquibase run.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/openmrs/ws/rest/v1/session >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
 
 volumes:
   certs:
