@@ -23,8 +23,16 @@ FHIR.oauth2
       </React.StrictMode>
     );
   })
-  .catch(() => {
-    // No SMART context — render in Demo Mode (standalone testing)
+  .catch((err) => {
+    // ready() rejects both when there's simply no SMART context (expected —
+    // fall back to Demo Mode) and when a real launch failed mid-handshake. If
+    // the URL carries OAuth params, a launch WAS attempted, so surface the
+    // error instead of silently hiding a bad redirect URI / scope as a blank
+    // Demo Mode screen.
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('code') || params.has('error')) {
+      console.error('[SMART] Launch failed, falling back to Demo Mode:', err);
+    }
     ReactDOM.createRoot(document.getElementById('root')).render(
       <React.StrictMode>
         <App client={null} />

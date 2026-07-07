@@ -85,33 +85,40 @@ values sufficient to compute FIB-4 changes over time, so confirm in the
 Observation results before relying on a specific patient for a live demo;
 the sandbox is built to prove connectivity, not to model realistic disease.
 
-## Code changes to run `web/` against Epic
+## What's already wired up
 
-The client works against Epic with config only for the happy path, but these
-gaps will bite on a real Epic response. Apply before a live demo:
+The `web/` client is set up to run against Epic — you just add the client ID.
+These changes are in the tree:
 
-1. **Restore the launch entry point.** `web/launch.html` (the page that calls
-   `FHIR.oauth2.authorize(...)`) is missing on `main` — it exists only on the
-   `recover-may8-d49b0b4` branch, and `web/vite.config.js` already references
-   `./launch.html`, so `npm run build` currently fails without it. Salvage
-   that file, then swap its hardcoded `clientId` for the Epic client ID and
-   its `scope` for the list above.
-2. **Fix the observation `status` filter** — `web/src/utils/fhirHelpers.js`
-   builds `status=final&status=amended&status=corrected`. Repeated params are
-   **AND** in FHIR search, so that matches nothing. Use a comma OR-list:
-   `status=final,amended,corrected`.
-3. **Don't trust `_sort=-date`.** Epic does not honor descending date sort on
-   Observation. Add `category=laboratory` for the liver labs and
-   `category=vital-signs` for BMI, raise `_count`, and sort client-side by
-   effective date to pick the latest — instead of assuming the first bundle
-   entry is newest.
-4. **Page the Condition bundle.** Follow `Bundle.link[rel=next]` — Epic pages
-   results and the risk-factor conditions (T2DM, obesity, etc.) can fall past
-   the first page.
-5. **Surface OAuth errors during bring-up.** `web/src/main.jsx` swallows an
-   `FHIR.oauth2.ready()` rejection and silently drops to Demo Mode, which will
-   hide a misconfigured redirect URI or scope as a blank fallback. Log the
-   error while wiring Epic up.
+- **Launch entry point** — `web/launch.html` + `web/src/launch.js` call
+  `FHIR.oauth2.authorize(...)`, reading the client ID / FHIR base / scopes from
+  Vite env (`web/.env.example`). It auto-detects **standalone** vs **EHR**
+  launch (from `?iss=` on the URL) and requests `launch/patient` or `launch`
+  accordingly. `web/vite.config.js` already builds `launch.html` as an entry.
+- **Observation `status` filter** — now a comma OR-list
+  (`status=final,amended,corrected`). Repeated `status=` params are **AND** in
+  FHIR search and would have matched nothing.
+- **No reliance on `_sort=-date`** — Epic ignores descending date sort, so the
+  client fetches a date-windowed page with `category=laboratory` (liver labs +
+  HbA1c) / `category=vital-signs` (BMI) and sorts client-side to pick the
+  latest, instead of trusting the first bundle entry.
+- **Condition paging** — the active-conditions query follows every `next` link
+  (`pageLimit: 0`), so a risk factor (T2DM, obesity, …) past page 1 isn't lost.
+- **OAuth errors surfaced** — `web/src/main.jsx` no longer silently swallows a
+  failed handshake; a launch that carries OAuth params but fails logs to the
+  console instead of hiding as a blank Demo Mode screen.
 
-Items 2–4 also improve correctness against OpenMRS; item 1 is required for any
-build. Configure via `.env` — see `config.example`.
+The status / sort / paging fixes also improve correctness against OpenMRS.
+
+## Run it
+
+Register the app for a non-production client ID, then:
+
+```sh
+cp web/.env.example web/.env.local   # set VITE_EPIC_CLIENT_ID
+cd web && npm install && npm run dev
+# open launch.html and sign in as a sandbox test patient
+```
+
+Left blank, `launch.html` shows a "set the client ID" message instead of
+launching.

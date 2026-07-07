@@ -60,57 +60,61 @@ function extractValue(obs) {
   return { value: numeric, unit, date };
 }
 
+/** Effective timestamp of an Observation, for client-side "latest" selection. */
+function obsDate(o) {
+  return new Date(
+    o.effectiveDateTime ?? o.effectivePeriod?.start ?? o.issued ?? 0
+  ).getTime();
+}
+
+/** From a search bundle, pick the newest observation that yields a numeric value.
+ *  We always sort client-side: Epic (and some others) ignore `_sort=-date`, so
+ *  bundle order can't be trusted to be newest-first.
+ */
+function pickLatest(bundle) {
+  const resources = (bundle?.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r) => r && r.resourceType === 'Observation')
+    .sort((a, b) => obsDate(b) - obsDate(a));
+  for (const r of resources) {
+    const val = extractValue(r);
+    if (val !== null) return val;
+  }
+  return null;
+}
+
 /** Fetch the most recent observation for given LOINC codes within cutoff months.
  *  Tries a fully-featured query first, then degrades gracefully for servers with
- *  limited search capability (e.g. no _sort, no comma-separated status).
+ *  limited search capability. Notes on the query shape:
+ *   - `status=final,amended,corrected` is a comma OR-list; repeated `status=`
+ *     params are AND in FHIR search and would match nothing.
+ *   - `category` (laboratory / vital-signs) is required or strongly preferred by
+ *     several EHRs (Epic) to return Observation results.
+ *   - Never rely on `_sort=-date`; fetch a window and sort client-side.
  */
-async function fetchLatestObs(client, loincs, cutoffMonths = 12) {
+async function fetchLatestObs(client, loincs, category, cutoffMonths = 12) {
   const code = loincs.map((c) => `http://loinc.org|${c}`).join(',');
   const since = monthsAgo(cutoffMonths);
+  const cat = category ? `&category=${category}` : '';
 
-  // Attempt 1: full query with sort + date filter + status (most FHIR R4 servers)
-  try {
-    const result = await client.patient.request(
-      `Observation?code=${code}&date=ge${since}&_sort=-date&_count=1&status=final&status=amended&status=corrected`
-    );
-    const val = extractValue(result);
-    if (val !== null) return val;
-  } catch {
-    // fall through
-  }
+  const queries = [
+    // Full: category + date window + status OR-list, a page wide enough that the
+    // window's latest is present, then sorted client-side.
+    `Observation?code=${code}${cat}&date=ge${since}&status=final,amended,corrected&_count=100`,
+    // Drop status (some servers reject the token OR-list).
+    `Observation?code=${code}${cat}&date=ge${since}&_count=100`,
+    // Drop category + date window (most permissive).
+    `Observation?code=${code}&_count=100`,
+  ];
 
-  // Attempt 2: drop status filter (some servers don't support multiple status params)
-  try {
-    const result = await client.patient.request(
-      `Observation?code=${code}&date=ge${since}&_sort=-date&_count=1`
-    );
-    const val = extractValue(result);
-    if (val !== null) return val;
-  } catch {
-    // fall through
-  }
-
-  // Attempt 3: drop date filter and sort, just get latest by any date, take first result
-  try {
-    const result = await client.patient.request(
-      `Observation?code=${code}&_count=5`
-    );
-    // Find most recent manually if multiple returned
-    const entries = result.entry ?? [];
-    const sorted = entries
-      .map((e) => e.resource)
-      .filter(Boolean)
-      .sort((a, b) => {
-        const da = new Date(a.effectiveDateTime ?? a.issued ?? 0);
-        const db = new Date(b.effectiveDateTime ?? b.issued ?? 0);
-        return db - da;
-      });
-    for (const resource of sorted) {
-      const val = extractValue({ resourceType: 'Observation', ...resource });
+  for (const q of queries) {
+    try {
+      const result = await client.patient.request(q);
+      const val = pickLatest(result);
       if (val !== null) return val;
+    } catch {
+      // try the next, more permissive query
     }
-  } catch {
-    // fall through
   }
 
   return null;
@@ -157,30 +161,38 @@ export async function fetchPatientData(client) {
   // Patient demographics
   const patient = await client.patient.read();
 
-  // Active conditions (for risk factor identification)
+  // Active conditions (for risk factor identification).
+  // pageLimit:0 follows every Bundle `next` link (Epic pages results, and a
+  // risk-factor condition can fall past page 1); flat:true returns the
+  // resources already unwrapped from bundle entries.
   let conditions = [];
   try {
-    const condBundle = await client.patient.request(
-      `Condition?clinical-status=active&_count=200`
-    );
-    conditions = condBundle.entry?.map((e) => e.resource) ?? [];
+    conditions =
+      (await client.patient.request(`Condition?clinical-status=active&_count=100`, {
+        pageLimit: 0,
+        flat: true,
+      })) ?? [];
   } catch {
     // Some servers may not support all params; try without filter
     try {
-      const fallback = await client.patient.request(`Condition?_count=200`);
-      conditions = fallback.entry?.map((e) => e.resource) ?? [];
+      conditions =
+        (await client.patient.request(`Condition?_count=100`, {
+          pageLimit: 0,
+          flat: true,
+        })) ?? [];
     } catch {
       conditions = [];
     }
   }
 
-  // Fetch all required labs in parallel
+  // Fetch all required labs in parallel. Category steers the Observation search:
+  // liver labs + HbA1c are `laboratory`; BMI is `vital-signs`.
   const [ast, alt, platelets, hba1c, bmi] = await Promise.all([
-    fetchLatestObs(client, LOINC.AST),
-    fetchLatestObs(client, LOINC.ALT),
-    fetchLatestObs(client, LOINC.PLATELETS),
-    fetchLatestObs(client, LOINC.HBA1C, 12),
-    fetchLatestObs(client, LOINC.BMI, 12),
+    fetchLatestObs(client, LOINC.AST, 'laboratory'),
+    fetchLatestObs(client, LOINC.ALT, 'laboratory'),
+    fetchLatestObs(client, LOINC.PLATELETS, 'laboratory'),
+    fetchLatestObs(client, LOINC.HBA1C, 'laboratory', 12),
+    fetchLatestObs(client, LOINC.BMI, 'vital-signs', 12),
   ]);
 
   return {
