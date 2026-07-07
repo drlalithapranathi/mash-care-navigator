@@ -136,7 +136,8 @@ jq(function(){
                                 doPost();
                             },
                             error: function(){
-                                doPost();
+                                statusEl.html('<span style="color:red">Could not start a visit; order not placed.</span>');
+                                if(btnEl) btnEl.prop("disabled", false);
                             }
                         });
                     }
@@ -193,7 +194,7 @@ jq(function(){
         });
     }
 
-    // ---- Record a "deferred / declined follow-up" decision as a boolean obs (#8) ----
+    // ---- Record a "deferred / declined follow-up" decision as a text obs (#8) ----
     function recordDeferral(statusEl, onSuccess){
         statusEl.html('<span style="color:#888">Recording...</span>');
         jq.ajax({
@@ -270,15 +271,21 @@ jq(function(){
         if(m["mashmasld.order.consult"]) RISK_ORDERS.CONSULT.uuid  = m["mashmasld.order.consult"];
     }
 
+    // Coerce an obs value to a finite positive number, else null (#12).
+    function validPositive(x){
+        var n = (x === null || x === undefined || x === "") ? NaN : Number(x);
+        return (isFinite(n) && n > 0) ? n : null;
+    }
+
     function loadLabsAndRender(){
     jq.when(
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.AST  + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ALT  + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.PLAT + "&v=full")
     ).done(function(astResp, altResp, platResp){
-        var ast  = pickLatestObsValue(astResp);
-        var alt  = pickLatestObsValue(altResp);
-        var plat = pickLatestObsValue(platResp);
+        var ast  = validPositive(pickLatestObsValue(astResp));
+        var alt  = validPositive(pickLatestObsValue(altResp));
+        var plat = validPositive(pickLatestObsValue(platResp));
 
         var el = jq("#fib4-screening-widget");
 
@@ -290,21 +297,33 @@ jq(function(){
             if(!plat) missing.push("PLAT");
 
             var missingNames = missing.map(function(k){ return LAB_NAMES[k]; }).join(", ");
-            var missingConceptUuids = missing.map(function(k){ return UUIDS[k]; });
 
-            var orderChecks = missingConceptUuids.map(function(cuuid){
-                return jq.getJSON(base + "/order?patient=" + patientUuid + "&concept=" + cuuid + "&v=default");
+            // Active-order check runs against the PANEL concepts we would place
+            // (CBC / Hepatic), not the obs concepts — the order is recorded
+            // against the panel, so checking the obs concept never matched (#13).
+            var panelsNeeded = [];
+            Object.keys(ORDER_PANELS).forEach(function(pk){
+                var panel = ORDER_PANELS[pk];
+                if(panel.covers.some(function(l){ return missing.indexOf(l) !== -1; })) panelsNeeded.push(panel);
+            });
+
+            var orderChecks = panelsNeeded.map(function(panel){
+                return jq.getJSON(base + "/order?patient=" + patientUuid + "&concept=" + panel.uuid + "&v=default");
             });
 
             jq.when.apply(jq, orderChecks).done(function(){
-                var responses = missing.length === 1 ? [arguments] : Array.prototype.slice.call(arguments);
-                var alreadyOrdered = [];
-                var stillMissing = [];
-
-                missing.forEach(function(key, i){
+                var responses = panelsNeeded.length === 1 ? [arguments] : Array.prototype.slice.call(arguments);
+                var orderedLabs = {};
+                panelsNeeded.forEach(function(panel, i){
                     var results = (responses[i][0] && responses[i][0].results) ? responses[i][0].results : [];
                     var hasPending = results.some(function(o){ return !o.voided && !o.dateStopped && !o.autoExpireDate; });
-                    if(hasPending) alreadyOrdered.push(LAB_NAMES[key]);
+                    if(hasPending) panel.covers.forEach(function(l){ orderedLabs[l] = true; });
+                });
+
+                var alreadyOrdered = [];
+                var stillMissing = [];
+                missing.forEach(function(key){
+                    if(orderedLabs[key]) alreadyOrdered.push(LAB_NAMES[key]);
                     else stillMissing.push(key);
                 });
 
@@ -436,7 +455,8 @@ jq(function(){
                                         placeOrders(encounterPayload);
                                     },
                                     error: function(){
-                                        placeOrders(encounterPayload);
+                                        status.html('<span style="color:red">Could not start a visit; orders not placed.</span>');
+                                        btn.prop("disabled", false).text("&#x2295; Order Missing Labs");
                                     }
                                 });
                             }
@@ -450,8 +470,23 @@ jq(function(){
         }
 
         // --- FIB-4 calculation (with age-adjusted lower cutoff) ---
-        var age  = ${patient.patient.age};
+        // Null-safe: a patient with no birthdate must not emit `var age = ;` (#11).
+        var age  = ${patient.patient.age != null ? patient.patient.age : 'null'};
+        var ageNum = validPositive(age);
+        if(ageNum === null){
+            el.html('<div style="padding:10px;background:#f5f5f5;border-left:4px solid #999;border-radius:4px">' +
+                '<strong style="color:#666">FIB-4 unavailable</strong><br>' +
+                '<span style="font-size:12px;color:#555">Patient age is required to compute FIB-4.</span></div>');
+            return;
+        }
+        age = ageNum;
         var fib4 = (age * ast) / (plat * Math.sqrt(alt));
+        if(!isFinite(fib4)){
+            el.html('<div style="padding:10px;background:#f5f5f5;border-left:4px solid #999;border-radius:4px">' +
+                '<strong style="color:#666">FIB-4 not interpretable</strong><br>' +
+                '<span style="font-size:12px;color:#555">Lab values are out of range for a FIB-4 calculation.</span></div>');
+            return;
+        }
         var lowerCutoff = getLowerCutoff(age);
 
         var color, level, bg, levelKey;
@@ -508,6 +543,12 @@ jq(function(){
         // Wire up risk-action buttons after they are in the DOM
         riskActionsRows.forEach(attachRiskAction);
         attachDeferLink();
+    })
+    .fail(function(){
+        jq("#fib4-screening-widget").html(
+            '<div style="padding:10px;color:#999;font-size:13px">FIB-4 unavailable &mdash; could not load labs. ' +
+            '<a href="#" id="fib4-retry" style="color:#009384;font-weight:600">Retry</a></div>');
+        jq("#fib4-retry").on("click", function(e){ e.preventDefault(); loadLabsAndRender(); });
     });
     }
 
