@@ -117,6 +117,9 @@ container's `bundledModules/` (back up the original first), and restart:
 python3 openmrs/deploy/repack-omod.py <current.omod> openmrs/widget/fib4screening.gsp <patched.omod>
 ```
 
+Back up the database off the Docker volume (a volume loss otherwise wipes all
+data) — run `openmrs/scripts/backup-db.sh` on the deploy host, or cron it.
+
 ---
 
 ## Credits
