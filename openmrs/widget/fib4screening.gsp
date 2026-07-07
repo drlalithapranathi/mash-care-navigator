@@ -204,6 +204,24 @@ jq(function(){
         return latest ? latest.value : null;
     }
 
+    // Concept/order UUIDs are overridable via global properties (issue #7); the
+    // hardcoded values above are the fallback if a GP is unset or lookup fails.
+    function applyGpOverrides(gp){
+        var m = {};
+        (((gp && gp.results)) || []).forEach(function(s){
+            if(s.property && s.value != null && s.value !== "") m[s.property] = s.value;
+        });
+        if(m["mashmasld.concept.ast"])   UUIDS.AST  = m["mashmasld.concept.ast"];
+        if(m["mashmasld.concept.alt"])   UUIDS.ALT  = m["mashmasld.concept.alt"];
+        if(m["mashmasld.concept.plat"])  UUIDS.PLAT = m["mashmasld.concept.plat"];
+        if(m["mashmasld.order.cbc"])     ORDER_PANELS.CBC.uuid     = m["mashmasld.order.cbc"];
+        if(m["mashmasld.order.hepatic"]) ORDER_PANELS.HEPATIC.uuid = m["mashmasld.order.hepatic"];
+        if(m["mashmasld.order.vcte"])    RISK_ORDERS.VCTE.uuid     = m["mashmasld.order.vcte"];
+        if(m["mashmasld.order.elf"])     RISK_ORDERS.ELF.uuid      = m["mashmasld.order.elf"];
+        if(m["mashmasld.order.consult"]) RISK_ORDERS.CONSULT.uuid  = m["mashmasld.order.consult"];
+    }
+
+    function loadLabsAndRender(){
     jq.when(
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.AST  + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ALT  + "&v=full"),
@@ -436,5 +454,11 @@ jq(function(){
         // Wire up risk-action buttons after they are in the DOM
         riskActionsRows.forEach(attachRiskAction);
     });
+    }
+
+    // Load GP overrides first (falls back to defaults on any failure), then render.
+    jq.getJSON(base + "/systemsetting?q=mashmasld&v=full")
+      .done(applyGpOverrides)
+      .always(loadLabsAndRender);
 });
 </script>

@@ -104,6 +104,10 @@ docker compose --env-file openmrs/.env -f openmrs/deploy/docker-compose.yml up -
 # 2. Seed the orderable concepts (OPENMRS_USER needs the System Developer role)
 set -a; source openmrs/.env; set +a
 ./openmrs/scripts/seed-concepts.sh
+
+# 3. (optional) Point the widget at this server's concepts via global properties
+#    instead of its built-in defaults — portable across servers.
+./openmrs/scripts/seed-global-properties.sh
 ```
 
 To deploy a new widget build, repack the OMOD with the new GSP, copy it into the
