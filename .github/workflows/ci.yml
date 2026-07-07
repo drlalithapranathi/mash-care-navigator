@@ -36,9 +36,9 @@ jobs:
           LETSENCRYPT_EMAIL: ci@example.test
           MYSQL_ROOT_PASSWORD: ci
           MYSQL_PASSWORD: ci
-          OPENMRS_BASE_URL: http://localhost/openmrs
-          OPENMRS_USER: ci
-          OPENMRS_PASSWORD: ci
+          MYSQL_DB: openmrs
+          MYSQL_USER: openmrs
+          OPENMRS_VERSION: demo
         run: docker compose -f openmrs/deploy/docker-compose.yml config -q
 
   widget:
