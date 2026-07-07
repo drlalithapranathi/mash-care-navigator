@@ -176,15 +176,21 @@ jq(function(){
         var statusEl = jq("#" + row.statusId);
         var btnEl = jq("#" + row.btnId);
 
-        // Check if there's already an active order for this concept
-        jq.getJSON(base + "/order?patient=" + patientUuid + "&concept=" + row.def.uuid + "&v=default", function(orderData){
+        // Disable until the active-order check returns, so a fast click can't
+        // place an order the guard would have blocked (#35).
+        btnEl.prop("disabled", true);
+        jq.getJSON(base + "/order?patient=" + patientUuid + "&concept=" + row.def.uuid + "&v=default")
+          .done(function(orderData){
             var results = (orderData && orderData.results) || [];
             var hasActive = results.some(function(o){ return !o.voided && !o.dateStopped && !o.autoExpireDate; });
             if(hasActive){
                 btnEl.prop("disabled", true).css({"background":"#bdbdbd","cursor":"not-allowed"}).text("Already ordered");
                 statusEl.html('<span style="color:#e65100">&#x23F3; Awaiting result</span>');
+            } else {
+                btnEl.prop("disabled", false);
             }
-        });
+          })
+          .fail(function(){ btnEl.prop("disabled", false); });
 
         btnEl.on("click", function(){
             btnEl.prop("disabled", true).text("Ordering...");
