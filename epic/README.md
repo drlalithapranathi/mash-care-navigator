@@ -1,16 +1,16 @@
-# Epic integration (SMART on FHIR)
+# Epic (SMART on FHIR)
 
-The `web/` client is a standalone SMART-on-FHIR app. This folder covers
-running it against Epic: app registration, OAuth configuration, and the
-sandbox reference.
+A standalone **SMART-on-FHIR web app** that screens for MASLD / MASH. It reads
+a patient's labs and conditions from Epic and displays a FIB-4 risk
+assessment. Read-only — it requests no write scopes.
 
-The client is **read-only** — it reads Observations and Conditions and
-displays FIB-4 recommendations. It requests no write scopes.
+Built with React + Vite + `fhirclient`. The same FIB-4 logic is implemented
+for OpenMRS as a native dashboard widget under [`../openmrs`](../openmrs).
 
 ## Prerequisites
 
+- Node.js.
 - An Epic app registration and its client ID (see [Register the app](#1-register-the-app)).
-- Node.js, for the `web/` client.
 
 ## Setup
 
@@ -33,8 +33,9 @@ not a secret, but keep it in `.env`, not in committed source.
 ### 2. Configure and run
 
 ```sh
-cp web/.env.example web/.env.local   # set VITE_EPIC_CLIENT_ID
-cd web && npm install && npm run dev
+cp .env.example .env.local   # set VITE_EPIC_CLIENT_ID
+npm install
+npm run dev
 ```
 
 Open `launch.html` and sign in as a sandbox test patient. If the client ID is
@@ -64,6 +65,15 @@ credentials are in Epic's
 
 Confirm the Observation results before a live demo — which patients carry the
 AST / ALT / platelet values needed for FIB-4 can change over time.
+
+## How it works
+
+| File | Role |
+|------|------|
+| `launch.html` → `src/launch.js` | Starts the SMART auth (PKCE); redirects to Epic to sign in. |
+| `index.html` → `src/main.jsx`   | Epic redirects back here; completes the token exchange and renders the app. |
+| `src/utils/fhirHelpers.js`      | FHIR queries — fetches the latest AST / ALT / platelets / HbA1c / BMI. |
+| `src/utils/fib4.js`, `riskAssessment.js` | FIB-4 score and risk tiers. |
 
 ### Epic-specific handling
 

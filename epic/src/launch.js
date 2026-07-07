@@ -8,7 +8,7 @@
  *                     no iss in the URL, so we supply it and request
  *                     `launch/patient` to trigger patient selection.
  *
- * Config comes from Vite env vars (see web/.env.example). The client ID is a
+ * Config comes from Vite env vars (see .env.example). The client ID is a
  * placeholder until you register the app and fill VITE_EPIC_CLIENT_ID — it is
  * not a secret, but keep it in .env, not in committed source.
  */
@@ -35,8 +35,8 @@ function showMessage(html) {
 
 if (!clientId) {
   showMessage(
-    'Set <code>VITE_EPIC_CLIENT_ID</code> in <code>web/.env.local</code> ' +
-      '(copy from <code>web/.env.example</code>), then reload. ' +
+    'Set <code>VITE_EPIC_CLIENT_ID</code> in <code>.env.local</code> ' +
+      '(copy from <code>.env.example</code>), then reload. ' +
       'See <code>epic/README.md</code>.'
   );
 } else {

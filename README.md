@@ -28,8 +28,7 @@ ELF) ordered.
 ```
 .
 ├── docs/                 Repo documentation assets (clinical workflow diagram, etc.)
-├── web/                  EHR-agnostic SMART-on-FHIR React client (Vite + Tailwind).
-├── epic/                 Epic sandbox SMART-on-FHIR setup for the web/ client (read-only).
+├── epic/                 SMART-on-FHIR web app (React + Vite) — reads FHIR, shows FIB-4. Runs against Epic.
 └── openmrs/              OpenMRS-specific deploy + customisations.
     ├── widget/           coreapps GSP fragment patched into the patient dashboard.
     ├── concepts/         Replayable manifest of orderable concepts + LOINC codes.
@@ -39,14 +38,15 @@ ELF) ordered.
 
 ## Quick start
 
-### Web client (`web/`)
+### Epic SMART app (`epic/`)
 ```sh
-cd web
+cd epic
 npm install
 npm run dev
 ```
-Opened without an EHR / SMART launch context, the client runs in Demo Mode
-with built-in sample patients.
+Opened without an EHR / SMART launch context, the app runs in Demo Mode
+with built-in sample patients. See [`epic/README.md`](epic/README.md) for
+Epic app registration and OAuth setup.
 
 ### OpenMRS deploy (`openmrs/`)
 See [`openmrs/README.md`](openmrs/README.md) for the full bring-up steps.
