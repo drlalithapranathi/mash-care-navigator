@@ -91,11 +91,14 @@ post_concept () {
     return 0
   fi
 
+  # Numeric concepts must allow decimals to accept fractional obs (e.g. FIB-4).
+  local allowdec="false"; [ "$dt_key" = "numeric" ] && allowdec="true"
   local body
   body=$(jq -n \
     --arg uuid "$concept_uuid" \
     --arg fsn "$fsn" --arg short "$short" --arg desc "$desc" \
     --arg dt "$dt_uuid" --arg cc "$class_uuid" \
+    --argjson allowdec "$allowdec" \
     '{
       uuid: $uuid,
       names: [
@@ -106,7 +109,7 @@ post_concept () {
       datatype: $dt,
       conceptClass: $cc,
       set: false
-    }')
+    } + (if $allowdec then {allowDecimal: true} else {} end)')
 
   curl -fsS "${AUTH[@]}" -H "Content-Type: application/json" \
     -X POST -d "$body" "${API}/concept" \

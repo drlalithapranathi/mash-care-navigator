@@ -80,6 +80,28 @@
       "datatype": "text",
       "loinc_code": null,
       "loinc_name": null
+    },
+    {
+      "key": "fib4_score",
+      "uuid": "fd064e9b-a811-412d-9000-b7134db9d020",
+      "fully_specified_name": "FIB-4 score",
+      "short_name": "FIB-4",
+      "description": "Computed FIB-4 index [(age x AST) / (platelets x sqrt(ALT))] recorded for MASLD fibrosis-risk trending.",
+      "concept_class": "finding",
+      "datatype": "numeric",
+      "loinc_code": null,
+      "loinc_name": null
+    },
+    {
+      "key": "fib4_category",
+      "uuid": "a27e88f2-ab54-434c-952b-be714d1af6b0",
+      "fully_specified_name": "MASLD fibrosis risk category",
+      "short_name": "MASLD risk",
+      "description": "FIB-4 risk band recorded at screening: low / intermediate / high.",
+      "concept_class": "finding",
+      "datatype": "text",
+      "loinc_code": null,
+      "loinc_name": null
     }
   ]
 }

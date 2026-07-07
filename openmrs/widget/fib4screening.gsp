@@ -16,7 +16,9 @@ jq(function(){
         AST:  "5914052f-e777-4efc-949b-0dee321ae55f",
         ALT:  "29a09214-cfd4-4db9-898e-f2a3e6f08feb",
         PLAT: "8575950e-90bf-4530-9595-deebbdf2cdde",
-        DEFERRED: "87fcf943-1e0c-4b09-8771-23cae2affda3"
+        DEFERRED: "87fcf943-1e0c-4b09-8771-23cae2affda3",
+        FIB4_SCORE: "fd064e9b-a811-412d-9000-b7134db9d020",
+        FIB4_CATEGORY: "a27e88f2-ab54-434c-952b-be714d1af6b0"
     };
 
     // Orderable panel concept UUIDs (LOINC-mapped) - missing-labs ordering
@@ -222,6 +224,28 @@ jq(function(){
         });
     }
 
+    // Persist the FIB-4 score + risk category as obs for trending, deduped so a
+    // repeat chart view doesn't spam identical obs — only writes when the score
+    // changes from the latest stored value (#23).
+    function persistFib4(score, category){
+        var rounded = Math.round(score * 100) / 100;
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.FIB4_SCORE + "&v=full")
+          .done(function(data){
+            var results = ((data && data.results) || []).filter(function(o){ return !o.voided; });
+            results.sort(function(a, b){ return new Date(b.obsDatetime) - new Date(a.obsDatetime); });
+            var latest = results.length ? Number(results[0].value) : null;
+            if(latest !== null && Math.abs(latest - rounded) < 0.005) return;   // unchanged — skip
+            postFib4Obs(UUIDS.FIB4_SCORE, rounded);
+            postFib4Obs(UUIDS.FIB4_CATEGORY, category);
+          });
+    }
+    function postFib4Obs(concept, value){
+        jq.ajax({
+            url: base + "/obs", type: "POST", contentType: "application/json",
+            data: JSON.stringify({ person: patientUuid, concept: concept, obsDatetime: new Date().toISOString(), value: value })
+        });
+    }
+
     // Wire the "defer follow-up" link and surface any prior deferral on load.
     function attachDeferLink(){
         var link = jq("#fib4-defer-link");
@@ -270,6 +294,8 @@ jq(function(){
         if(m["mashmasld.concept.alt"])   UUIDS.ALT  = m["mashmasld.concept.alt"];
         if(m["mashmasld.concept.plat"])  UUIDS.PLAT = m["mashmasld.concept.plat"];
         if(m["mashmasld.concept.deferred"]) UUIDS.DEFERRED = m["mashmasld.concept.deferred"];
+        if(m["mashmasld.concept.fib4score"])    UUIDS.FIB4_SCORE    = m["mashmasld.concept.fib4score"];
+        if(m["mashmasld.concept.fib4category"]) UUIDS.FIB4_CATEGORY = m["mashmasld.concept.fib4category"];
         if(m["mashmasld.order.cbc"])     ORDER_PANELS.CBC.uuid     = m["mashmasld.order.cbc"];
         if(m["mashmasld.order.hepatic"]) ORDER_PANELS.HEPATIC.uuid = m["mashmasld.order.hepatic"];
         if(m["mashmasld.order.vcte"])    RISK_ORDERS.VCTE.uuid     = m["mashmasld.order.vcte"];
@@ -536,6 +562,8 @@ jq(function(){
         if(fib4 < lowerCutoff)        { color="#2e7d32"; level="LOW RISK";          bg="#e8f5e9"; levelKey="low"; }
         else if(fib4 <= FIB4_UPPER)   { color="#e65100"; level="INTERMEDIATE RISK"; bg="#fff8e1"; levelKey="intermediate"; }
         else                          { color="#c62828"; level="HIGH RISK";         bg="#ffebee"; levelKey="high"; }
+
+        persistFib4(fib4, levelKey);   // #23: record the score + category (deduped)
 
         var ageNote = (age != null && age >= 65)
             ? '<span style="font-size:11px;color:#777"> (age &ge;65: low/intermediate cutoff = ' + lowerCutoff.toFixed(1) + ')</span>'
