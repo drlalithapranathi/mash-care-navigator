@@ -23,6 +23,10 @@ set -euo pipefail
 API="${OPENMRS_BASE_URL%/}/ws/rest/v1"
 AUTH=(-u "${OPENMRS_USER}:${OPENMRS_PASSWORD}")
 
+command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
+authed=$(curl -fsS "${AUTH[@]}" "${API}/session" | jq -r '.authenticated' 2>/dev/null || echo false)
+[ "$authed" = "true" ] || { echo "authentication failed for ${OPENMRS_USER}" >&2; exit 1; }
+
 # property -> UUID (mirror the defaults in widget/fib4screening.gsp)
 GP=(
   "mashmasld.concept.ast=5914052f-e777-4efc-949b-0dee321ae55f"
@@ -36,19 +40,24 @@ GP=(
   "mashmasld.order.consult=f682c646-b597-4cd4-8282-4191e0eb040b"
 )
 
+fail=0
 for entry in "${GP[@]}"; do
   prop="${entry%%=*}"; val="${entry##*=}"
-  # POST creates the property (or updates it if it already exists).
-  if curl -fsS "${AUTH[@]}" -H "Content-Type: application/json" -X POST \
-       -d "{\"property\":\"${prop}\",\"value\":\"${val}\"}" \
-       "${API}/systemsetting" >/dev/null 2>&1; then
-    echo "  set ${prop}"
+  # Create, or update in place if it already exists (a create POST 500s on a
+  # pre-existing property, so fall through to the by-id update).
+  curl -fsS "${AUTH[@]}" -H "Content-Type: application/json" -X POST \
+    -d "{\"property\":\"${prop}\",\"value\":\"${val}\"}" "${API}/systemsetting" >/dev/null 2>&1 \
+    || curl -fsS "${AUTH[@]}" -H "Content-Type: application/json" -X POST \
+         -d "{\"value\":\"${val}\"}" "${API}/systemsetting/${prop}" >/dev/null 2>&1 || true
+  # Verify by reading the stored value back — the only reliable success signal.
+  got=$(curl -fsS "${AUTH[@]}" "${API}/systemsetting/${prop}?v=custom:(value)" | jq -r '.value // empty' 2>/dev/null || echo "")
+  if [ "$got" = "$val" ]; then
+    echo "  ok ${prop}"
   else
-    # Already present — update in place by property id.
-    curl -fsS "${AUTH[@]}" -H "Content-Type: application/json" -X POST \
-      -d "{\"value\":\"${val}\"}" "${API}/systemsetting/${prop}" >/dev/null \
-      && echo "  updated ${prop}" || echo "  FAILED ${prop}"
+    echo "  FAILED ${prop} (stored '${got}', wanted '${val}')" >&2
+    fail=$((fail + 1))
   fi
 done
 
-echo "done."
+if [ "$fail" -gt 0 ]; then echo "${fail} property/properties failed." >&2; exit 1; fi
+echo "done — ${#GP[@]} properties verified."

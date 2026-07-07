@@ -66,14 +66,13 @@ post_concept () {
   local dt_uuid=$(resolve ".datatypes.${dt_key}")
   local concept_uuid=$(resolve ".concepts[] | select(.key==\"$key\") | .uuid")
 
-  # Skip if a concept with the same fully-specified name already exists.
-  local existing
-  existing=$(curl -fsS "${AUTH[@]}" \
-    --data-urlencode "q=$fsn" --data-urlencode "v=default" -G "${API}/concept" \
-    | jq -r --arg fsn "$fsn" '.results[] | select(.display==$fsn) | .uuid' | head -1)
-  if [ -n "$existing" ]; then
-    echo "  skip create ${key}: already exists ($existing)" >&2
-    echo "$existing"
+  # Skip if the pinned-UUID concept already exists. Keying on the pinned UUID
+  # (not an FSN name-search) is deterministic and index-independent — a fresh
+  # create is instantly a no-op on re-run, and a same-named dictionary concept
+  # is never adopted in place of the UUID the widget/GPs actually query.
+  if curl -fsS "${AUTH[@]}" "${API}/concept/${concept_uuid}?v=custom:(uuid)" >/dev/null 2>&1; then
+    echo "  skip create ${key}: already exists (${concept_uuid})" >&2
+    echo "$concept_uuid"
     return 0
   fi
 
@@ -147,16 +146,22 @@ post_loinc_mapping () {
   local map_body
   map_body=$(jq -n --arg term "$term_uuid" --arg type "$SAME_AS" \
     '{conceptReferenceTerm:$term, conceptMapType:$type}')
-  curl -fsS "${AUTH[@]}" -H "Content-Type: application/json" \
-    -X POST -d "$map_body" "${API}/concept/${concept_uuid}/mapping" >/dev/null
-  echo "  -> mapped LOINC ${code}"
+  if curl -fsS "${AUTH[@]}" -H "Content-Type: application/json" \
+       -X POST -d "$map_body" "${API}/concept/${concept_uuid}/mapping" >/dev/null; then
+    echo "  -> mapped LOINC ${code}"
+  else
+    echo "  ERROR: failed to map LOINC ${code} to ${concept_uuid}" >&2
+    return 1
+  fi
 }
 
+fail=0
 for key in $(jq -r '.concepts[].key' "$MANIFEST"); do
   echo "== ${key} =="
   uuid=$(post_concept "$key")
   echo "  concept uuid: ${uuid}"
-  post_loinc_mapping "$key" "$uuid" || true
+  post_loinc_mapping "$key" "$uuid" || fail=$((fail + 1))
 done
 
+if [ "$fail" -gt 0 ]; then echo "${fail} concept(s) had LOINC mapping failures." >&2; exit 1; fi
 echo "done."
