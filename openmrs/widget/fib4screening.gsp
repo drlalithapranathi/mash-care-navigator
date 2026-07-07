@@ -249,14 +249,14 @@ jq(function(){
 
     // --- Step 1: Fetch the latest AST / ALT / platelets, querying by concept so
     // the newest value is found even on charts with many observations (issue #9). ---
-    function pickLatestObsValue(resp){
+    function pickLatestObs(resp){
         var results = (resp && resp[0] && resp[0].results) ? resp[0].results : [];
         var latest = null;
         results.forEach(function(o){
             if(o.value == null || o.voided) return;
             if(!latest || new Date(o.obsDatetime) > new Date(latest.obsDatetime)) latest = o;
         });
-        return latest ? latest.value : null;
+        return latest;   // full obs (value + obsDatetime) or null (#34)
     }
 
     // Concept/order UUIDs are overridable via global properties (issue #7); the
@@ -289,9 +289,12 @@ jq(function(){
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ALT  + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.PLAT + "&v=full")
     ).done(function(astResp, altResp, platResp){
-        var ast  = validPositive(pickLatestObsValue(astResp));
-        var alt  = validPositive(pickLatestObsValue(altResp));
-        var plat = validPositive(pickLatestObsValue(platResp));
+        var astObs  = pickLatestObs(astResp);
+        var altObs  = pickLatestObs(altResp);
+        var platObs = pickLatestObs(platResp);
+        var ast  = validPositive(astObs  && astObs.value);
+        var alt  = validPositive(altObs  && altObs.value);
+        var plat = validPositive(platObs && platObs.value);
 
         var el = jq("#fib4-screening-widget");
 
@@ -495,6 +498,25 @@ jq(function(){
         }
         var lowerCutoff = getLowerCutoff(age);
 
+        // #34: surface the source draw dates and warn on stale / wide-span inputs.
+        var labDateNote = "";
+        (function(){
+            var ds = [astObs, altObs, platObs].map(function(o){ return o ? new Date(o.obsDatetime) : null; });
+            if(ds.indexOf(null) !== -1) return;
+            var times = ds.map(function(d){ return d.getTime(); });
+            var spanDays = Math.round((Math.max.apply(null, times) - Math.min.apply(null, times)) / 86400000);
+            var ageDays  = Math.round((new Date().getTime() - Math.max.apply(null, times)) / 86400000);
+            var warn = (spanDays > 180 || ageDays > 365);
+            function fmt(d){ return d.toLocaleDateString(); }
+            labDateNote =
+                '<div style="font-size:11px;color:' + (warn ? "#b71c1c" : "#777") + ';margin-top:2px">' +
+                (warn ? "&#x26A0; " : "") +
+                'Labs: AST ' + fmt(ds[0]) + ' &middot; ALT ' + fmt(ds[1]) + ' &middot; PLT ' + fmt(ds[2]) +
+                (spanDays > 180 ? ' &middot; drawn ' + spanDays + 'd apart' : "") +
+                (ageDays > 365 ? ' &middot; latest ' + ageDays + 'd old' : "") +
+                '</div>';
+        })();
+
         var color, level, bg, levelKey;
         if(fib4 < lowerCutoff)        { color="#2e7d32"; level="LOW RISK";          bg="#e8f5e9"; levelKey="low"; }
         else if(fib4 <= FIB4_UPPER)   { color="#e65100"; level="INTERMEDIATE RISK"; bg="#fff8e1"; levelKey="intermediate"; }
@@ -540,6 +562,7 @@ jq(function(){
             '<strong style="color:'+color+';font-size:20px">'+fib4.toFixed(2)+'</strong> ' +
             '<span style="color:'+color+';font-weight:600">'+level+'</span>' + ageNote + '<br>' +
             '<span style="font-size:12px;color:#666">FIB-4 = ('+age+' &times; '+ast+') / ('+plat+' &times; &radic;'+alt+')</span>' +
+            labDateNote +
             '</div>' +
             riskActionsHtml +
             '<a href="/' + OPENMRS_CONTEXT_PATH + '/owa/mashmasld/index.html?patientId=' + patientUuid + '" ' +
