@@ -37,7 +37,7 @@ if (!clientId) {
   showMessage(
     'Set <code>VITE_EPIC_CLIENT_ID</code> in <code>.env.local</code> ' +
       '(copy from <code>.env.example</code>), then reload. ' +
-      'See <code>epic/README.md</code>.'
+      'See the repository README.'
   );
 } else {
   FHIR.oauth2
