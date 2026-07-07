@@ -29,6 +29,7 @@ ELF) ordered.
 .
 ├── docs/                 Repo documentation assets (clinical workflow diagram, etc.)
 ├── web/                  EHR-agnostic SMART-on-FHIR React client (Vite + Tailwind).
+├── epic/                 Epic sandbox SMART-on-FHIR setup for the web/ client (read-only).
 └── openmrs/              OpenMRS-specific deploy + customisations.
     ├── widget/           coreapps GSP fragment patched into the patient dashboard.
     ├── concepts/         Replayable manifest of orderable concepts + LOINC codes.
