@@ -496,6 +496,21 @@ jq(function(){
                 '<span style="font-size:12px;color:#555">Lab values are out of range for a FIB-4 calculation.</span></div>');
             return;
         }
+
+        // #16: FIB-4 assumes chronic, stable disease — guard the inputs that invalidate it.
+        if(plat > 1000){
+            el.html('<div style="padding:10px;background:#fff3e0;border-left:4px solid #e65100;border-radius:4px">' +
+                '<strong style="color:#bf360c">Platelet value out of range</strong><br>' +
+                '<span style="font-size:12px;color:#555">Platelets of ' + plat + ' look like an absolute count (unit mismatch); FIB-4 expects ~150&ndash;400 &times;10&sup9;/L. Not shown.</span></div>');
+            return;
+        }
+        if(ast > 500 || alt > 500){
+            el.html('<div style="padding:10px;background:#fff3e0;border-left:4px solid #e65100;border-radius:4px">' +
+                '<strong style="color:#bf360c">Possible acute hepatocellular injury</strong><br>' +
+                '<span style="font-size:12px;color:#555">Markedly elevated transaminases (AST ' + ast + ', ALT ' + alt + '). FIB-4 assumes chronic disease and is not interpretable here &mdash; evaluate for acute injury.</span></div>');
+            return;
+        }
+
         var lowerCutoff = getLowerCutoff(age);
 
         // #34: surface the source draw dates and warn on stale / wide-span inputs.
