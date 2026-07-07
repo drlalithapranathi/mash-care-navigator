@@ -45,7 +45,17 @@ resolve () {
   jq -r "$1" "$MANIFEST"
 }
 
-LOINC=$(resolve '.sources.loinc')
+# Resolve the LOINC concept source at runtime; the manifest UUID is only a
+# fallback (a pinned source UUID 500s on servers where LOINC has a different
+# UUID or none) (#32).
+LOINC=$(curl -fsS "${AUTH[@]}" \
+  --data-urlencode "q=LOINC" --data-urlencode "v=custom:(uuid,name,hl7Code)" -G "${API}/conceptsource" \
+  | jq -r '.results[]? | select((.name // "" | ascii_upcase | contains("LOINC")) or (.hl7Code // "" | ascii_upcase == "LN")) | .uuid' | head -1)
+if [ -z "$LOINC" ] || [ "$LOINC" = "null" ]; then
+  LOINC=$(resolve '.sources.loinc')
+  echo "  (LOINC source not found via API; falling back to manifest UUID ${LOINC})" >&2
+fi
+[ -n "$LOINC" ] && [ "$LOINC" != "null" ] || { echo "no LOINC concept source available" >&2; exit 1; }
 SAME_AS=$(resolve '.map_types.same_as')
 
 # -- create concept (if needed) and return its uuid --
@@ -53,6 +63,11 @@ post_concept () {
   local key="$1"
   local existing_uuid=$(resolve ".concepts[] | select(.key==\"$key\") | .existing_uuid // empty")
   if [ -n "$existing_uuid" ]; then
+    # Confirm the pre-existing concept actually exists before mapping onto it (#32).
+    if ! curl -fsS "${AUTH[@]}" "${API}/concept/${existing_uuid}?v=custom:(uuid)" >/dev/null 2>&1; then
+      echo "  ERROR: existing_uuid concept not found: ${existing_uuid} (${key})" >&2
+      return 1
+    fi
     echo "$existing_uuid"
     return 0
   fi
