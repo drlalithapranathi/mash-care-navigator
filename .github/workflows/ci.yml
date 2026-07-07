@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scripts:
+    name: Shell scripts + concept manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck the deploy/seed scripts
+        run: shellcheck -S error openmrs/scripts/*.sh
+      - name: Validate concepts.json
+        run: |
+          python3 - <<'PY'
+          import json
+          d = json.load(open("openmrs/concepts/concepts.json"))
+          assert d.get("concepts"), "no concepts in manifest"
+          for c in d["concepts"]:
+              assert "key" in c, c
+              assert ("uuid" in c) ^ ("existing_uuid" in c), f"{c['key']}: exactly one of uuid/existing_uuid"
+          print(len(d["concepts"]), "concepts OK")
+          PY
+
+  compose:
+    name: docker-compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the compose file parses
+        env:
+          VIRTUAL_HOST: example.test
+          LETSENCRYPT_EMAIL: ci@example.test
+          MYSQL_ROOT_PASSWORD: ci
+          MYSQL_PASSWORD: ci
+          OPENMRS_BASE_URL: http://localhost/openmrs
+          OPENMRS_USER: ci
+          OPENMRS_PASSWORD: ci
+        run: docker compose -f openmrs/deploy/docker-compose.yml config -q
+
+  widget:
+    name: FIB-4 widget JS parses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Extract the widget <script> and syntax-check it
+        run: |
+          python3 - <<'PY'
+          import re
+          src = open("openmrs/widget/fib4screening.gsp").read()
+          m = re.search(r"<script[^>]*>(.*)</script>", src, re.S)
+          js = re.sub(r"\$\{[^}]*\}", "0", m.group(1))   # stub GSP interpolations
+          open("/tmp/widget.js", "w").write(js)
+          PY
+          node --check /tmp/widget.js
+
+  epic:
+    name: Epic app builds
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: epic
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build
