@@ -15,7 +15,8 @@ jq(function(){
     var UUIDS = {
         AST:  "5914052f-e777-4efc-949b-0dee321ae55f",
         ALT:  "29a09214-cfd4-4db9-898e-f2a3e6f08feb",
-        PLAT: "8575950e-90bf-4530-9595-deebbdf2cdde"
+        PLAT: "8575950e-90bf-4530-9595-deebbdf2cdde",
+        DEFERRED: "87fcf943-1e0c-4b09-8771-23cae2affda3"
     };
 
     // Orderable panel concept UUIDs (LOINC-mapped) - missing-labs ordering
@@ -192,6 +193,53 @@ jq(function(){
         });
     }
 
+    // ---- Record a "deferred / declined follow-up" decision as a boolean obs (#8) ----
+    function recordDeferral(statusEl, onSuccess){
+        statusEl.html('<span style="color:#888">Recording...</span>');
+        jq.ajax({
+            url: base + "/obs",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({
+                person: patientUuid,
+                concept: UUIDS.DEFERRED,
+                obsDatetime: new Date().toISOString(),
+                value: "deferred"
+            }),
+            success: function(){ if(onSuccess) onSuccess(); },
+            error: function(xhr){
+                var msg = "Could not record.";
+                try { msg = JSON.parse(xhr.responseText).error.message; } catch(e){}
+                statusEl.html('<span style="color:red">Error: ' + msg + '</span>');
+            }
+        });
+    }
+
+    // Wire the "defer follow-up" link and surface any prior deferral on load.
+    function attachDeferLink(){
+        var link = jq("#fib4-defer-link");
+        if(!link.length) return;
+        var statusEl = jq("#fib4-defer-status");
+
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.DEFERRED + "&v=full", function(data){
+            var results = ((data && data.results) || []).filter(function(o){ return !o.voided && o.value; });
+            if(results.length){
+                results.sort(function(a,b){ return new Date(b.obsDatetime) - new Date(a.obsDatetime); });
+                var d = new Date(results[0].obsDatetime);
+                statusEl.html('<span style="color:#777">&#x23F8; Deferred on ' + d.toLocaleDateString() + '</span>');
+            }
+        });
+
+        link.on("click", function(e){
+            e.preventDefault();
+            link.css({"pointer-events":"none","opacity":"0.5"});
+            recordDeferral(statusEl, function(){
+                statusEl.html('<span style="color:#777;font-weight:600">&#x23F8; Follow-up deferred</span>');
+                link.hide();
+            });
+        });
+    }
+
     // --- Step 1: Fetch the latest AST / ALT / platelets, querying by concept so
     // the newest value is found even on charts with many observations (issue #9). ---
     function pickLatestObsValue(resp){
@@ -214,6 +262,7 @@ jq(function(){
         if(m["mashmasld.concept.ast"])   UUIDS.AST  = m["mashmasld.concept.ast"];
         if(m["mashmasld.concept.alt"])   UUIDS.ALT  = m["mashmasld.concept.alt"];
         if(m["mashmasld.concept.plat"])  UUIDS.PLAT = m["mashmasld.concept.plat"];
+        if(m["mashmasld.concept.deferred"]) UUIDS.DEFERRED = m["mashmasld.concept.deferred"];
         if(m["mashmasld.order.cbc"])     ORDER_PANELS.CBC.uuid     = m["mashmasld.order.cbc"];
         if(m["mashmasld.order.hepatic"]) ORDER_PANELS.HEPATIC.uuid = m["mashmasld.order.hepatic"];
         if(m["mashmasld.order.vcte"])    RISK_ORDERS.VCTE.uuid     = m["mashmasld.order.vcte"];
@@ -417,6 +466,11 @@ jq(function(){
         // ---- Risk-level order actions ----
         var riskActionsRows = [];
         var riskActionsHtml = "";
+        var deferLinkHtml =
+            '<div style="margin-top:4px">' +
+            '<a href="#" id="fib4-defer-link" style="font-size:11px;color:#777;text-decoration:underline">Not now &mdash; defer follow-up</a>' +
+            ' <span id="fib4-defer-status" style="font-size:11px;margin-left:6px"></span>' +
+            '</div>';
 
         if(levelKey === "intermediate"){
             var colorsAmber = { border: "#ffb74d", text: "#bf360c", btnBg: "#e65100" };
@@ -426,7 +480,7 @@ jq(function(){
             riskActionsHtml =
                 '<div style="margin-top:10px;padding:8px;background:#fff8e1;border-left:3px solid #e65100;border-radius:4px">' +
                 '<div style="font-size:11px;font-weight:700;color:#bf360c;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Recommended actions &middot; FIB-4 ' + lowerCutoff.toFixed(1) + '&ndash;' + FIB4_UPPER + '</div>' +
-                rowVcte.html + rowElf.html +
+                rowVcte.html + rowElf.html + deferLinkHtml +
                 '</div>';
         }
         else if(levelKey === "high"){
@@ -436,7 +490,7 @@ jq(function(){
             riskActionsHtml =
                 '<div style="margin-top:10px;padding:8px;background:#ffebee;border-left:3px solid #c62828;border-radius:4px">' +
                 '<div style="font-size:11px;font-weight:700;color:#b71c1c;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Urgent &middot; recommended action &middot; FIB-4 &gt;' + FIB4_UPPER + '</div>' +
-                rowConsult.html +
+                rowConsult.html + deferLinkHtml +
                 '</div>';
         }
 
@@ -453,6 +507,7 @@ jq(function(){
 
         // Wire up risk-action buttons after they are in the DOM
         riskActionsRows.forEach(attachRiskAction);
+        attachDeferLink();
     });
     }
 

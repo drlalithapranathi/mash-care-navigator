@@ -2,7 +2,8 @@
   "$comment": "Replayable manifest of concepts the MASH Care Navigator app needs in OpenMRS. Used by openmrs/scripts/seed-concepts.sh. Entries with `existing_uuid` are pre-existing concepts that only need a LOINC mapping; entries with `uuid` are concepts to create with that explicit UUID.",
   "datatypes": {
     "n_a":     "8d4a4c94-c2cc-11de-8d13-0010c6dffd0f",
-    "numeric": "8d4a4488-c2cc-11de-8d13-0010c6dffd0f"
+    "numeric": "8d4a4488-c2cc-11de-8d13-0010c6dffd0f",
+    "text":    "8d4a4ab4-c2cc-11de-8d13-0010c6dffd0f"
   },
   "concept_classes": {
     "test":       "8d4907b2-c2cc-11de-8d13-0010c6dffd0f",
@@ -68,6 +69,17 @@
       "datatype": "numeric",
       "loinc_code": "39156-5",
       "loinc_name": "Body mass index (BMI) [Ratio]"
+    },
+    {
+      "key": "deferred",
+      "uuid": "87fcf943-1e0c-4b09-8771-23cae2affda3",
+      "fully_specified_name": "MASLD screening deferred",
+      "short_name": "MASLD deferred",
+      "description": "Provider deferred / declined the recommended MASLD (FIB-4) follow-up at this encounter.",
+      "concept_class": "finding",
+      "datatype": "text",
+      "loinc_code": null,
+      "loinc_name": null
     }
   ]
 }
