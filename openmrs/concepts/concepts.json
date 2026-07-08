@@ -136,6 +136,50 @@
       "datatype": "text",
       "loinc_code": null,
       "loinc_name": null
+    },
+    {
+      "key": "etiology_hbsag",
+      "uuid": "ffb98eae-36bc-42fc-8b23-778279f1b6a1",
+      "fully_specified_name": "MASLD workup - Hepatitis B surface antigen result",
+      "short_name": "HBsAg (MASLD workup)",
+      "description": "Hepatitis B surface antigen result recorded while excluding competing liver etiologies before reading FIB-4 as MASLD (positive / negative).",
+      "concept_class": "finding",
+      "datatype": "text",
+      "loinc_code": null,
+      "loinc_name": null
+    },
+    {
+      "key": "etiology_hcv",
+      "uuid": "a137efb7-da31-415d-9099-8f6796fc4b66",
+      "fully_specified_name": "MASLD workup - Hepatitis C antibody result",
+      "short_name": "anti-HCV (MASLD workup)",
+      "description": "Hepatitis C antibody result recorded while excluding competing liver etiologies before reading FIB-4 as MASLD (positive / negative).",
+      "concept_class": "finding",
+      "datatype": "text",
+      "loinc_code": null,
+      "loinc_name": null
+    },
+    {
+      "key": "etiology_alcohol",
+      "uuid": "13c620ba-c36f-40b5-9a4a-b665a71054e2",
+      "fully_specified_name": "MASLD workup - AUDIT-C alcohol screen score",
+      "short_name": "AUDIT-C (MASLD workup)",
+      "description": "AUDIT-C alcohol-use screening score (0-12) recorded to distinguish MASLD from MetALD/ALD before reading FIB-4.",
+      "concept_class": "finding",
+      "datatype": "numeric",
+      "loinc_code": null,
+      "loinc_name": null
+    },
+    {
+      "key": "etiology_determination",
+      "uuid": "a59ede5b-4d22-447d-ae5f-7c240e8fa462",
+      "fully_specified_name": "MASLD vs MetALD/ALD determination",
+      "short_name": "MASLD determination",
+      "description": "Clinical determination after excluding competing etiologies: MASLD, MetALD, ALD, viral, autoimmune, or other; recorded before labeling FIB-4 as MASLD fibrosis risk.",
+      "concept_class": "finding",
+      "datatype": "text",
+      "loinc_code": null,
+      "loinc_name": null
     }
   ]
 }

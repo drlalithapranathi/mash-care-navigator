@@ -24,7 +24,11 @@ jq(function(){
         FIB4_CATEGORY: "a27e88f2-ab54-434c-952b-be714d1af6b0",
         FIB4_INDICATION: "11b4d295-be33-4f03-a7d5-d615513a5146",
         HBA1C: "b1c56e95-075a-47f3-8712-100c4d9efe1d",
-        BMI:   "4448c907-7fed-416c-9871-541b6c3b72b1"
+        BMI:   "4448c907-7fed-416c-9871-541b6c3b72b1",
+        ETIOLOGY_HBSAG: "ffb98eae-36bc-42fc-8b23-778279f1b6a1",
+        ETIOLOGY_HCV:   "a137efb7-da31-415d-9099-8f6796fc4b66",
+        ETIOLOGY_ALCOHOL: "13c620ba-c36f-40b5-9a4a-b665a71054e2",
+        ETIOLOGY_DETERMINATION: "a59ede5b-4d22-447d-ae5f-7c240e8fa462"
     };
 
     // Orderable panel concept UUIDs (LOINC-mapped) - missing-labs ordering
@@ -397,6 +401,10 @@ jq(function(){
         if(m["mashmasld.concept.fib4indication"]) UUIDS.FIB4_INDICATION = m["mashmasld.concept.fib4indication"];
         if(m["mashmasld.concept.hba1c"]) UUIDS.HBA1C = m["mashmasld.concept.hba1c"];
         if(m["mashmasld.concept.bmi"])   UUIDS.BMI   = m["mashmasld.concept.bmi"];
+        if(m["mashmasld.concept.etiologyhbsag"])   UUIDS.ETIOLOGY_HBSAG   = m["mashmasld.concept.etiologyhbsag"];
+        if(m["mashmasld.concept.etiologyhcv"])     UUIDS.ETIOLOGY_HCV     = m["mashmasld.concept.etiologyhcv"];
+        if(m["mashmasld.concept.etiologyalcohol"]) UUIDS.ETIOLOGY_ALCOHOL = m["mashmasld.concept.etiologyalcohol"];
+        if(m["mashmasld.concept.etiologydetermination"]) UUIDS.ETIOLOGY_DETERMINATION = m["mashmasld.concept.etiologydetermination"];
         if(m["mashmasld.order.cbc"])     ORDER_PANELS.CBC.uuid     = m["mashmasld.order.cbc"];
         if(m["mashmasld.order.hepatic"]) ORDER_PANELS.HEPATIC.uuid = m["mashmasld.order.hepatic"];
         if(m["mashmasld.order.vcte"])    RISK_ORDERS.VCTE.uuid     = m["mashmasld.order.vcte"];
@@ -459,6 +467,25 @@ jq(function(){
         return { present: present, label: label, reasons: reasons, factors: factors };
     }
 
+    // ---- Competing-etiology exclusion (#22) ----
+    // MASLD is a diagnosis of exclusion: significant alcohol reclassifies to
+    // MetALD/ALD, and viral/autoimmune hepatitis must be ruled out before FIB-4 is
+    // read as MASLD fibrosis risk. Returns masld / competing / unexcluded.
+    function determineEtiology(hbsag, hcv, alcohol, determination){
+        if(determination){
+            var d = determination.toLowerCase();
+            var isMasld = d.indexOf("masld") !== -1 && d.indexOf("metald") === -1;
+            return { status: isMasld ? "masld" : "competing", label: determination };
+        }
+        var competing = [];
+        if(hbsag && /pos|react/i.test(hbsag)) competing.push("hepatitis B (HBsAg positive)");
+        if(hcv && /pos|react/i.test(hcv))     competing.push("hepatitis C (anti-HCV positive)");
+        if(alcohol != null && alcohol >= 4)   competing.push("significant alcohol (AUDIT-C " + alcohol + ")");
+        if(competing.length) return { status: "competing", label: competing.join(", ") };
+        if(hbsag != null && hcv != null)      return { status: "masld", label: "viral serology negative" };
+        return { status: "unexcluded", label: "" };
+    }
+
     function loadLabsAndRender(){
     jq.when(
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.AST  + "&v=full"),
@@ -466,8 +493,12 @@ jq(function(){
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.PLAT + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.HBA1C + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.BMI  + "&v=full"),
-        jq.getJSON(base + "/condition?patient=" + patientUuid + "&v=custom:(display,clinicalStatus)")
-    ).done(function(astResp, altResp, platResp, hba1cResp, bmiResp, condResp){
+        jq.getJSON(base + "/condition?patient=" + patientUuid + "&v=custom:(display,clinicalStatus)"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_HBSAG + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_HCV + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_ALCOHOL + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_DETERMINATION + "&v=full")
+    ).done(function(astResp, altResp, platResp, hba1cResp, bmiResp, condResp, hbsagResp, hcvResp, alcoholResp, determResp){
         var astObs  = pickLatestObs(astResp);
         var altObs  = pickLatestObs(altResp);
         var platObs = pickLatestObs(platResp);
@@ -478,6 +509,12 @@ jq(function(){
         var bmiObs   = pickLatestObs(bmiResp);
         var hba1c = validPositive(hba1cObs && hba1cObs.value);
         var bmi   = validPositive(bmiObs   && bmiObs.value);
+        var hbsagObs = pickLatestObs(hbsagResp), hcvObs = pickLatestObs(hcvResp);
+        var alcObs = pickLatestObs(alcoholResp), determObs = pickLatestObs(determResp);
+        var hbsagVal   = hbsagObs ? String(hbsagObs.value) : null;
+        var hcvVal     = hcvObs ? String(hcvObs.value) : null;
+        var alcoholVal = (alcObs && alcObs.value != null) ? Number(alcObs.value) : null;
+        var determVal  = determObs ? String(determObs.value) : null;
 
         var el = jq("#fib4-screening-widget");
 
@@ -769,6 +806,17 @@ jq(function(){
         var ageCaution = (age < 35)
             ? '<div style="font-size:11px;color:#b71c1c;margin-top:2px">&#x26A0; FIB-4 is not validated under 35 &mdash; interpret with caution.</div>'
             : '';
+        // #22: qualify the MASLD label by competing-etiology status.
+        var etiology = determineEtiology(hbsagVal, hcvVal, alcoholVal, determVal);
+        var etiologyNote;
+        if(etiology.status === "competing"){
+            etiologyNote = '<div style="font-size:11px;color:#b71c1c;margin-top:2px">&#x26A0; Competing etiology: ' + etiology.label + ' &mdash; read fibrosis as MetALD/ALD/viral, not MASLD.</div>';
+        } else if(etiology.status === "masld"){
+            etiologyNote = '<div style="font-size:11px;color:#2e7d32;margin-top:2px">&#x2713; MASLD &mdash; competing etiologies excluded (' + etiology.label + ').</div>';
+        } else {
+            etiologyNote = '<div style="font-size:11px;color:#bf360c;margin-top:2px">&#x26A0; MASLD provisional &mdash; competing etiologies (alcohol / HBV / HCV / autoimmune) not excluded. ' +
+                '<a href="#" id="fib4-etiology-attest" style="color:#009384;font-weight:600">Mark excluded (MASLD)</a></div>';
+        }
 
         // ---- Risk-level order actions ----
         var riskActionsRows = [];
@@ -825,6 +873,7 @@ jq(function(){
             labDateNote +
             indicationNote +
             ageCaution +
+            etiologyNote +
             '</div>' +
             riskActionsHtml +
             '<a href="/' + OPENMRS_CONTEXT_PATH + '/owa/mashmasld/index.html?patientId=' + patientUuid + '" ' +
@@ -834,6 +883,17 @@ jq(function(){
         // Wire up risk-action buttons after they are in the DOM
         riskActionsRows.forEach(attachRiskAction);
         attachDeferLink();
+        // #22: record a "competing etiologies excluded — MASLD" determination.
+        jq("#fib4-etiology-attest").on("click", function(e){
+            e.preventDefault();
+            jq(this).replaceWith('<span style="color:#777">Recording&hellip;</span>');
+            jq.ajax({
+                url: base + "/obs", type: "POST", contentType: "application/json",
+                data: JSON.stringify({ person: patientUuid, concept: UUIDS.ETIOLOGY_DETERMINATION,
+                    obsDatetime: new Date().toISOString(), value: "MASLD - competing etiologies excluded (attested)" }),
+                success: function(){ loadLabsAndRender(); }
+            });
+        });
     })
     .fail(function(){
         jq("#fib4-screening-widget").html(
