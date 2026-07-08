@@ -99,3 +99,33 @@ docker restart mash-openmrs-app
 
 Since the artifact filename encodes `VERSION` and the GSP carries the matching
 comment, the live widget always corresponds to an identifiable version.
+
+## Access control & credentials (#17)
+
+The reference distro ships the well-known `admin` / `Admin123` account and the
+whole surface (`/ws/rest`, admin, `/owa`) is reachable once the host is public.
+Before any real data goes in:
+
+1. **Rotate the admin password off `Admin123`** and enforce a password policy:
+
+   ```sh
+   export OPENMRS_BASE_URL=https://<host>/openmrs OPENMRS_USER=admin OPENMRS_PASSWORD=Admin123
+   export NEW_ADMIN_PASSWORD='<a strong, unique password>'
+   ./openmrs/scripts/harden-instance.sh
+   ```
+
+   The script rotates the password, sets `security.password*` policy global
+   properties, and verifies the old password no longer authenticates. Afterwards
+   update any seed/deploy env (`OPENMRS_PASSWORD`) to the new value.
+
+2. **Gate the network surface.** Prefer a VPN or an IP allowlist for a pilot.
+   As a stopgap, the reference proxy supports per-vhost HTTP basic auth — see
+   [`htpasswd/README.md`](htpasswd/README.md). On a host-nginx deployment, add
+   an `auth_basic` + `auth_basic_user_file` to the `/openmrs` location instead.
+
+3. **Move off the demo distro** for anything holding PHI — the demo image bundles
+   demo patients and is meant for evaluation, not a data-bearing pilot.
+
+OpenMRS platform has no open *user* self-registration to disable; the exposure
+the issue flags is the default credential plus an open network surface, both
+addressed above.

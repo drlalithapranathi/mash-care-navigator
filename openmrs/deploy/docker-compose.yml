@@ -11,6 +11,10 @@ services:
       - vhost:/etc/nginx/vhost.d
       - html:/usr/share/nginx/html
       - /var/run/docker.sock:/tmp/docker.sock:ro
+      # Per-vhost HTTP basic auth: drop a file named exactly $VIRTUAL_HOST into
+      # ./htpasswd to gate the whole instance until a pilot has proper access
+      # control (VPN/allowlist). No file → no auth, so this is non-breaking (#17).
+      - ./htpasswd:/etc/nginx/htpasswd:ro
     environment:
       - DEFAULT_HOST=${VIRTUAL_HOST}
     networks:

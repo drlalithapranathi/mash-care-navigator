@@ -32,6 +32,10 @@ openmrs/deploy/secrets/*
 # Widget OMOD build inputs/outputs (#28) — reproduced from git via `make omod`
 openmrs/deploy/*.omod
 
+# Proxy basic-auth credential files (#17) — commit only the README
+openmrs/deploy/htpasswd/*
+!openmrs/deploy/htpasswd/README.md
+
 # Never commit anywhere: PDFs and Office docs (reference/study material)
 *.pdf
 *.docx
