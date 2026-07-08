@@ -125,6 +125,17 @@
       "datatype": "date",
       "loinc_code": null,
       "loinc_name": null
+    },
+    {
+      "key": "fib4_indication",
+      "uuid": "11b4d295-be33-4f03-a7d5-d615513a5146",
+      "fully_specified_name": "MASLD screening indication",
+      "short_name": "MASLD indication",
+      "description": "The at-risk indication under which FIB-4 was computed (e.g. type 2 diabetes, elevated liver enzymes, two or more metabolic risk factors), or a clinician attestation.",
+      "concept_class": "finding",
+      "datatype": "text",
+      "loinc_code": null,
+      "loinc_name": null
     }
   ]
 }

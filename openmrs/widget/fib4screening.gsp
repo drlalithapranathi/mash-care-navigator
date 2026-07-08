@@ -21,7 +21,10 @@ jq(function(){
         DEFERRAL_REASON: "99c8726a-e9cd-461f-b6f6-cd9cc0a166e1",
         DEFERRAL_FOLLOWUP: "f45d680b-811d-4955-aa5f-0d1a925f1cbc",
         FIB4_SCORE: "fd064e9b-a811-412d-9000-b7134db9d020",
-        FIB4_CATEGORY: "a27e88f2-ab54-434c-952b-be714d1af6b0"
+        FIB4_CATEGORY: "a27e88f2-ab54-434c-952b-be714d1af6b0",
+        FIB4_INDICATION: "11b4d295-be33-4f03-a7d5-d615513a5146",
+        HBA1C: "b1c56e95-075a-47f3-8712-100c4d9efe1d",
+        BMI:   "4448c907-7fed-416c-9871-541b6c3b72b1"
     };
 
     // Orderable panel concept UUIDs (LOINC-mapped) - missing-labs ordering
@@ -301,6 +304,7 @@ jq(function(){
             if(latest !== null && Math.abs(latest - rounded) < 0.005) return;   // unchanged — skip
             postFib4Obs(UUIDS.FIB4_SCORE, rounded);
             postFib4Obs(UUIDS.FIB4_CATEGORY, category);
+            if(indication) postFib4Obs(UUIDS.FIB4_INDICATION, indication);   // #36
           });
     }
     function postFib4Obs(concept, value){
@@ -390,6 +394,9 @@ jq(function(){
         if(m["mashmasld.concept.deferralfollowup"]) UUIDS.DEFERRAL_FOLLOWUP = m["mashmasld.concept.deferralfollowup"];
         if(m["mashmasld.concept.fib4score"])    UUIDS.FIB4_SCORE    = m["mashmasld.concept.fib4score"];
         if(m["mashmasld.concept.fib4category"]) UUIDS.FIB4_CATEGORY = m["mashmasld.concept.fib4category"];
+        if(m["mashmasld.concept.fib4indication"]) UUIDS.FIB4_INDICATION = m["mashmasld.concept.fib4indication"];
+        if(m["mashmasld.concept.hba1c"]) UUIDS.HBA1C = m["mashmasld.concept.hba1c"];
+        if(m["mashmasld.concept.bmi"])   UUIDS.BMI   = m["mashmasld.concept.bmi"];
         if(m["mashmasld.order.cbc"])     ORDER_PANELS.CBC.uuid     = m["mashmasld.order.cbc"];
         if(m["mashmasld.order.hepatic"]) ORDER_PANELS.HEPATIC.uuid = m["mashmasld.order.hepatic"];
         if(m["mashmasld.order.vcte"])    RISK_ORDERS.VCTE.uuid     = m["mashmasld.order.vcte"];
@@ -425,18 +432,41 @@ jq(function(){
         return (isFinite(n) && n > 0) ? n : null;
     }
 
+    // ---- Screening indication (#36) ----
+    // AGA/AASLD screen a defined at-risk population; don't opportunistically score
+    // everyone. A clinician can attest an indication not visible in structured data.
+    var indicationAttested = false;
+    function determineIndication(hba1c, bmi, ast, alt){
+        var reasons = [], factors = [];
+        if(hba1c != null && hba1c >= 6.5)      reasons.push("type 2 diabetes (HbA1c " + hba1c + "%)");
+        else if(hba1c != null && hba1c >= 5.7) factors.push("prediabetes (HbA1c " + hba1c + "%)");
+        if(bmi != null && bmi >= 30)      factors.push("obesity (BMI " + bmi.toFixed(1) + ")");
+        else if(bmi != null && bmi >= 25) factors.push("overweight (BMI " + bmi.toFixed(1) + ")");
+        if((ast != null && ast > 40) || (alt != null && alt > 40)) reasons.push("persistently elevated liver enzymes");
+        // T2DM or elevated enzymes qualify alone; otherwise need >=2 metabolic factors.
+        var present = reasons.length > 0 || factors.length >= 2;
+        var label = reasons.concat(factors.length >= 2 ? factors : []).join(", ");
+        return { present: present, label: label, reasons: reasons, factors: factors };
+    }
+
     function loadLabsAndRender(){
     jq.when(
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.AST  + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ALT  + "&v=full"),
-        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.PLAT + "&v=full")
-    ).done(function(astResp, altResp, platResp){
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.PLAT + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.HBA1C + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.BMI  + "&v=full")
+    ).done(function(astResp, altResp, platResp, hba1cResp, bmiResp){
         var astObs  = pickLatestObs(astResp);
         var altObs  = pickLatestObs(altResp);
         var platObs = pickLatestObs(platResp);
         var ast  = validPositive(astObs  && astObs.value);
         var alt  = validPositive(altObs  && altObs.value);
         var plat = validPositive(platObs && platObs.value);
+        var hba1cObs = pickLatestObs(hba1cResp);
+        var bmiObs   = pickLatestObs(bmiResp);
+        var hba1c = validPositive(hba1cObs && hba1cObs.value);
+        var bmi   = validPositive(bmiObs   && bmiObs.value);
 
         var el = jq("#fib4-screening-widget");
 
@@ -660,6 +690,21 @@ jq(function(){
             return;
         }
 
+        // #36: confirm an AGA/AASLD screening indication before labeling MASLD risk.
+        var indication = determineIndication(hba1c, bmi, ast, alt);
+        if(!indication.present && !indicationAttested){
+            el.html(
+                '<div style="padding:10px;background:#eceff1;border-left:4px solid #607d8b;border-radius:4px">' +
+                '<strong style="color:#455a64">FIB-4 not shown &mdash; no documented screening indication</strong><br>' +
+                '<span style="font-size:12px;color:#555">MASLD/FIB-4 screening targets type 2 diabetes, hepatic steatosis, &ge;2 metabolic risk factors, or persistently elevated liver enzymes.' +
+                (indication.factors.length ? ' Found: ' + indication.factors.join(", ") + '.' : '') + '</span><br>' +
+                '<a href="#" id="fib4-attest" style="font-size:12px;color:#009384;font-weight:600">Assess anyway (attest indication)</a>' +
+                '</div>');
+            jq("#fib4-attest").on("click", function(e){ e.preventDefault(); indicationAttested = true; loadLabsAndRender(); });
+            return;
+        }
+        var indicationLabel = indication.present ? indication.label : "clinician-attested";
+
         var lowerCutoff = getLowerCutoff(age);
 
         // #34: surface the source draw dates and warn on stale / wide-span inputs.
@@ -686,11 +731,13 @@ jq(function(){
         else if(fib4 <= FIB4_UPPER)   { color="#e65100"; level="INTERMEDIATE RISK"; bg="#fff8e1"; levelKey="intermediate"; }
         else                          { color="#c62828"; level="HIGH RISK";         bg="#ffebee"; levelKey="high"; }
 
-        persistFib4(fib4, levelKey);   // #23: record the score + category (deduped)
+        persistFib4(fib4, levelKey, indicationLabel);   // #23/#36: score + category + indication (deduped)
 
         var ageNote = (age != null && age >= 65)
             ? '<span style="font-size:11px;color:#777"> (age &ge;65: low/intermediate cutoff = ' + lowerCutoff.toFixed(1) + ')</span>'
             : '';
+        var indicationNote =
+            '<div style="font-size:11px;color:#607d8b;margin-top:2px">Indication: ' + indicationLabel + '</div>';
 
         // ---- Risk-level order actions ----
         var riskActionsRows = [];
@@ -745,6 +792,7 @@ jq(function(){
             '<span style="color:'+color+';font-weight:600">'+level+'</span>' + ageNote + '<br>' +
             '<span style="font-size:12px;color:#666">FIB-4 = ('+age+' &times; '+ast+') / ('+plat+' &times; &radic;'+alt+')</span>' +
             labDateNote +
+            indicationNote +
             '</div>' +
             riskActionsHtml +
             '<a href="/' + OPENMRS_CONTEXT_PATH + '/owa/mashmasld/index.html?patientId=' + patientUuid + '" ' +
