@@ -47,11 +47,26 @@ jq(function(){
         PLAT: "Platelet Count"
     };
 
-    // Order type, care setting, encounter type, visit type UUIDs
+    // Order type, care setting, encounter type, visit type UUIDs. All are
+    // GP-overridable so ordering works on a non-refapp instance (issue #25) —
+    // see applyGpOverrides; the values here are the refapp-default fallbacks.
     var TEST_ORDER_TYPE   = "52a447d3-a64a-11e3-9aeb-50e549534c5e";
     var OUTPATIENT        = "6f0c9a92-6f24-11e3-af88-005056821db0";
     var VISIT_NOTE        = "d7151f82-c1f3-4152-a605-2f9ea7414a79";
     var FACILITY_VISIT    = "7b0f5697-27e3-40c4-8bae-f4049abfb4ed";
+    // Optional inpatient mapping (no universal default, so unset unless seeded):
+    // when both are configured, an active visit of the inpatient visit type makes
+    // orders use the inpatient care setting instead of always outpatient (#25).
+    var INPATIENT_CARE      = null;
+    var INPATIENT_VISITTYPE = null;
+
+    // Choose the care setting for an order from the patient's active visit,
+    // defaulting to outpatient when no inpatient mapping is configured (#25).
+    function careSettingForVisit(visit){
+        if(INPATIENT_CARE && INPATIENT_VISITTYPE && visit && visit.visitType &&
+           visit.visitType.uuid === INPATIENT_VISITTYPE) return INPATIENT_CARE;
+        return OUTPATIENT;
+    }
 
     // Age-adjusted FIB-4 cutoffs (McPherson 2017 + AGA Clinical Care Pathway)
     var FIB4_LOWER_DEFAULT = 1.3;
@@ -92,7 +107,7 @@ jq(function(){
                             action: "NEW",
                             patient: patientUuid,
                             concept: conceptUuid,
-                            careSetting: OUTPATIENT,
+                            careSetting: careSettingForVisit(visitData.results && visitData.results[0]),
                             orderer: ordererUuid,
                             orderType: TEST_ORDER_TYPE
                         }]
@@ -302,6 +317,13 @@ jq(function(){
         if(m["mashmasld.order.vcte"])    RISK_ORDERS.VCTE.uuid     = m["mashmasld.order.vcte"];
         if(m["mashmasld.order.elf"])     RISK_ORDERS.ELF.uuid      = m["mashmasld.order.elf"];
         if(m["mashmasld.order.consult"]) RISK_ORDERS.CONSULT.uuid  = m["mashmasld.order.consult"];
+        // Ordering metadata UUIDs (#25).
+        if(m["mashmasld.ordertype.test"])          TEST_ORDER_TYPE     = m["mashmasld.ordertype.test"];
+        if(m["mashmasld.caresetting.outpatient"])  OUTPATIENT          = m["mashmasld.caresetting.outpatient"];
+        if(m["mashmasld.caresetting.inpatient"])   INPATIENT_CARE      = m["mashmasld.caresetting.inpatient"];
+        if(m["mashmasld.encountertype.visitnote"]) VISIT_NOTE          = m["mashmasld.encountertype.visitnote"];
+        if(m["mashmasld.visittype.facility"])      FACILITY_VISIT      = m["mashmasld.visittype.facility"];
+        if(m["mashmasld.visittype.inpatient"])     INPATIENT_VISITTYPE = m["mashmasld.visittype.inpatient"];
     }
 
     // Coerce an obs value to a finite positive number, else null (#12).
@@ -433,7 +455,7 @@ jq(function(){
                                     action: "NEW",
                                     patient: patientUuid,
                                     concept: panel.uuid,
-                                    careSetting: OUTPATIENT,
+                                    careSetting: careSettingForVisit(visitData.results && visitData.results[0]),
                                     orderer: ordererUuid,
                                     orderType: TEST_ORDER_TYPE
                                 };

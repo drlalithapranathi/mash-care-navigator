@@ -40,6 +40,16 @@ GP=(
   "mashmasld.order.vcte=cb9450cf-bb90-4600-9116-b7c1ab8ee5b3"
   "mashmasld.order.elf=cd75cf42-ef4b-4d15-9ea4-ea12eca9e568"
   "mashmasld.order.consult=f682c646-b597-4cd4-8282-4191e0eb040b"
+  # Ordering metadata UUIDs — refapp defaults (mirror widget/fib4screening.gsp) (#25)
+  "mashmasld.ordertype.test=52a447d3-a64a-11e3-9aeb-50e549534c5e"
+  "mashmasld.caresetting.outpatient=6f0c9a92-6f24-11e3-af88-005056821db0"
+  "mashmasld.encountertype.visitnote=d7151f82-c1f3-4152-a605-2f9ea7414a79"
+  "mashmasld.visittype.facility=7b0f5697-27e3-40c4-8bae-f4049abfb4ed"
+  # Optional inpatient mapping — no universal default, so seed only on instances
+  # that have them; when both are set the widget picks the inpatient care setting
+  # for orders placed on an active inpatient visit (#25):
+  #   "mashmasld.caresetting.inpatient=<uuid>"
+  #   "mashmasld.visittype.inpatient=<uuid>"
 )
 
 fail=0
