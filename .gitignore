@@ -24,6 +24,11 @@ coverage/
 *.key
 id_rsa*
 
+# Docker secrets — commit only the .example templates + README (#33)
+openmrs/deploy/secrets/*
+!openmrs/deploy/secrets/*.example
+!openmrs/deploy/secrets/README.md
+
 # Never commit anywhere: PDFs and Office docs (reference/study material)
 *.pdf
 *.docx

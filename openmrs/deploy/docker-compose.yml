@@ -47,15 +47,23 @@ services:
       --innodb_buffer_pool_size=1G
     environment:
       MYSQL_DATABASE: ${MYSQL_DB:?set MYSQL_DB in .env}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER in .env}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      # Passwords are read from mounted files (Docker secrets), never declared as
+      # container env — so they don't leak via `docker inspect` or /proc/<pid>/environ (#33).
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+    secrets:
+      - mysql_root_password
+      - mysql_password
     volumes:
       - db-data:/var/lib/mysql
     networks:
       - openmrs-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      # Passwordless liveness: `mysqladmin ping` reports success even when the
+      # server refuses auth, which already proves it is accepting connections —
+      # so no credential is embedded in the healthcheck argv/config (#33).
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -67,11 +75,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # startup.sh templates connection.password from $DB_PASSWORD; inject it from
+    # the mounted secret file so the credential is never a declared env var (#33).
+    entrypoint: ["/bin/sh", "-c", "export DB_PASSWORD=\"$$(cat /run/secrets/mysql_password)\"; exec /usr/local/tomcat/startup.sh"]
     environment:
       DB_DATABASE: ${MYSQL_DB}
       DB_HOST: db
       DB_USERNAME: ${MYSQL_USER}
-      DB_PASSWORD: ${MYSQL_PASSWORD}
+      # DB_PASSWORD is injected from /run/secrets/mysql_password by the entrypoint above (#33).
       # Gateable for controlled upgrades: after first provisioning, set
       # DB_AUTO_UPDATE=false in .env and flip it on only for a backed-up upgrade
       # (snapshot with scripts/backup-db.sh first). Defaults preserve first-boot.
@@ -91,6 +102,8 @@ services:
     networks:
       - proxy-net
       - openmrs-net
+    secrets:
+      - mysql_password
     healthcheck:
       # So the proxy stops routing to a wedged/booting app. start_period is
       # generous for the slow first-boot Liquibase run.
@@ -99,6 +112,15 @@ services:
       timeout: 10s
       retries: 5
       start_period: 300s
+
+# File-based Docker secrets: create these files (mode 600) before `up`; they are
+# gitignored. `docker compose config` still validates when they are absent, so CI
+# stays green — they are only read at container start (#33).
+secrets:
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+  mysql_password:
+    file: ./secrets/mysql_password
 
 volumes:
   certs:
