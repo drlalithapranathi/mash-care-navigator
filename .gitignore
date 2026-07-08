@@ -29,6 +29,9 @@ openmrs/deploy/secrets/*
 !openmrs/deploy/secrets/*.example
 !openmrs/deploy/secrets/README.md
 
+# Widget OMOD build inputs/outputs (#28) — reproduced from git via `make omod`
+openmrs/deploy/*.omod
+
 # Never commit anywhere: PDFs and Office docs (reference/study material)
 *.pdf
 *.docx

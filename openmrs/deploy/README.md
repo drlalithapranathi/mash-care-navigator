@@ -57,3 +57,45 @@ Notes:
   `MYSQL_IMAGE` back to 5.x, remove that flag (5.6 rejects it).
 - Re-test the widget's REST reads/writes after the cutover before decommissioning
   the 5.6 volume.
+
+## The widget as a reproducible, versioned artifact (#28)
+
+The widget lives in git as a single GSP (`openmrs/widget/fib4screening.gsp`,
+stamped with a version comment matching `openmrs/widget/VERSION`, visible in the
+patient-chart page source so you can tell which build is live). The deployable is
+that GSP patched into a base `coreapps` OMOD.
+
+`repack-omod.py` is a **surgical single-entry replace**: it copies every original
+zip entry — including the directory entries the module loader walks — through with
+its `ZipInfo` unchanged and swaps only the target GSP's bytes, then asserts the
+namelist is byte-identical and only that one file changed. No `os.walk` rebuild,
+so no structural drift (the old rebuild-and-diff approach is gone).
+
+Build a versioned artifact deterministically:
+
+```sh
+# base = the widget-REGISTERED coreapps from the running pinned container
+docker cp mash-openmrs-app:/usr/local/tomcat/webapps/openmrs/WEB-INF/\
+bundledModules/coreapps-1.34.0.omod openmrs/deploy/coreapps-1.34.0.omod
+make -C openmrs/deploy omod        # -> coreapps-1.34.0+mashfib4-<VERSION>.omod
+```
+
+The base OMOD carries the dashboard-widget *registration* (which is not in the
+GSP), so it must come from the registered module, not stock. Base OMOD and built
+artifacts are gitignored — they are reproduced from git, not stored in it.
+
+**Making a recreate/pull unable to revert the patch.** The current live deploy
+`docker cp`s the patched OMOD into the container's `WEB-INF/bundledModules/`,
+which lives only in the ephemeral writable layer — a `pull`/recreate reverts it.
+To make the patch durable, drop the built OMOD into the persistent
+`openmrs-data` volume's module dir instead, where OpenMRS loads it and it
+survives recreate:
+
+```sh
+docker cp coreapps-1.34.0+mashfib4-<VERSION>.omod \
+  mash-openmrs-app:/root/.OpenMRS/modules/coreapps-1.34.0.omod
+docker restart mash-openmrs-app
+```
+
+Since the artifact filename encodes `VERSION` and the GSP carries the matching
+comment, the live widget always corresponds to an identifiable version.

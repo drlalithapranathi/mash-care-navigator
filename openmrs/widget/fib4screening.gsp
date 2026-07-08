@@ -1,3 +1,4 @@
+<!-- mash-fib4-widget 1.1.0 · patched into coreapps-1.34.0 · see openmrs/widget/VERSION (#28) -->
 <div id="fib4-screening-widget">
     <div style="padding:10px">
         <span style="color:#888">Loading FIB-4...</span>
