@@ -432,6 +432,16 @@ jq(function(){
         return (isFinite(n) && n > 0) ? n : null;
     }
 
+    // Best-effort pregnancy detection from active problem-list conditions (#15).
+    function isPregnant(condResp){
+        var results = (condResp && condResp[0] && condResp[0].results) || [];
+        return results.some(function(c){
+            var status = c.clinicalStatus ? String(c.clinicalStatus.display || c.clinicalStatus) : "";
+            var active = (status === "") || /active/i.test(status);
+            return active && c.display && /pregnan/i.test(c.display);
+        });
+    }
+
     // ---- Screening indication (#36) ----
     // AGA/AASLD screen a defined at-risk population; don't opportunistically score
     // everyone. A clinician can attest an indication not visible in structured data.
@@ -455,8 +465,9 @@ jq(function(){
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ALT  + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.PLAT + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.HBA1C + "&v=full"),
-        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.BMI  + "&v=full")
-    ).done(function(astResp, altResp, platResp, hba1cResp, bmiResp){
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.BMI  + "&v=full"),
+        jq.getJSON(base + "/condition?patient=" + patientUuid + "&v=custom:(display,clinicalStatus)")
+    ).done(function(astResp, altResp, platResp, hba1cResp, bmiResp, condResp){
         var astObs  = pickLatestObs(astResp);
         var altObs  = pickLatestObs(altResp);
         var platObs = pickLatestObs(platResp);
@@ -668,6 +679,22 @@ jq(function(){
             return;
         }
         age = ageNum;
+
+        // #15: population guards — FIB-4 is validated only for non-pregnant adults
+        // and performs poorly under ~35.
+        if(age < 18){
+            el.html('<div style="padding:10px;background:#ede7f6;border-left:4px solid #5e35b1;border-radius:4px">' +
+                '<strong style="color:#4527a0">FIB-4 not applicable (age ' + age + ')</strong><br>' +
+                '<span style="font-size:12px;color:#555">FIB-4 is not validated in children. Use pediatric hepatology assessment for suspected liver disease under 18.</span></div>');
+            return;
+        }
+        if(isPregnant(condResp)){
+            el.html('<div style="padding:10px;background:#fce4ec;border-left:4px solid #ad1457;border-radius:4px">' +
+                '<strong style="color:#880e4f">FIB-4 not interpretable in pregnancy</strong><br>' +
+                '<span style="font-size:12px;color:#555">AST/ALT and platelets shift in pregnancy; the differential (HELLP, AFLP, intrahepatic cholestasis) needs separate workup. FIB-4 is not shown.</span></div>');
+            return;
+        }
+
         var fib4 = (age * ast) / (plat * Math.sqrt(alt));
         if(!isFinite(fib4)){
             el.html('<div style="padding:10px;background:#f5f5f5;border-left:4px solid #999;border-radius:4px">' +
@@ -738,6 +765,10 @@ jq(function(){
             : '';
         var indicationNote =
             '<div style="font-size:11px;color:#607d8b;margin-top:2px">Indication: ' + indicationLabel + '</div>';
+        // #15: 18-34 gets the score with an explicit low-validity caveat.
+        var ageCaution = (age < 35)
+            ? '<div style="font-size:11px;color:#b71c1c;margin-top:2px">&#x26A0; FIB-4 is not validated under 35 &mdash; interpret with caution.</div>'
+            : '';
 
         // ---- Risk-level order actions ----
         var riskActionsRows = [];
@@ -793,6 +824,7 @@ jq(function(){
             '<span style="font-size:12px;color:#666">FIB-4 = ('+age+' &times; '+ast+') / ('+plat+' &times; &radic;'+alt+')</span>' +
             labDateNote +
             indicationNote +
+            ageCaution +
             '</div>' +
             riskActionsHtml +
             '<a href="/' + OPENMRS_CONTEXT_PATH + '/owa/mashmasld/index.html?patientId=' + patientUuid + '" ' +
