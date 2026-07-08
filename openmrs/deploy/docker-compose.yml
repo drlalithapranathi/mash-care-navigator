@@ -1,6 +1,6 @@
 services:
   nginx-proxy:
-    image: nginxproxy/nginx-proxy:1.6
+    image: nginxproxy/nginx-proxy:1.6@sha256:5dd14e68ea81f33692b810d096ac8ebe7aa789d75ce91e05f09d56d044ed8ee3
     container_name: nginx-proxy
     restart: unless-stopped
     ports:
@@ -18,7 +18,7 @@ services:
       - openmrs-net
 
   acme-companion:
-    image: nginxproxy/acme-companion:2.4
+    image: nginxproxy/acme-companion:2.4@sha256:202fffa4e13e52144526425f2014b01c34daa55fec806549aadd329c4ee4441c
     container_name: acme-companion
     restart: unless-stopped
     depends_on:
@@ -36,7 +36,12 @@ services:
       - proxy-net
 
   db:
-    image: mysql:5.6
+    # Supported, patched, digest-pinned MySQL (default 8.0.40). The live pilot box
+    # still runs mysql:5.6 (EOL) — migrate it via dump/restore before aligning it
+    # to this file (see openmrs/deploy/README.md, #26). To stay on 5.x for now,
+    # set MYSQL_IMAGE=mysql:5.6@sha256:20575ecebe6216036d25dab5903808211f1e9ba63dc7825ac20cb975e34cfcae
+    # in .env AND drop the --default-authentication-plugin flag below (5.6 rejects it).
+    image: ${MYSQL_IMAGE:-mysql:8.0.40@sha256:d58ac93387f644e4e040c636b8f50494e78e5afc27ca0a87348b2f577da2b7ff}
     container_name: openmrs-db
     restart: unless-stopped
     command: >
@@ -45,6 +50,7 @@ services:
       --collation-server=utf8_general_ci
       --max_allowed_packet=64M
       --innodb_buffer_pool_size=1G
+      --default-authentication-plugin=mysql_native_password
     environment:
       MYSQL_DATABASE: ${MYSQL_DB:?set MYSQL_DB in .env}
       MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER in .env}
@@ -69,7 +75,11 @@ services:
       retries: 10
 
   openmrs:
-    image: openmrs/openmrs-reference-application-distro:${OPENMRS_VERSION:-demo}
+    # Digest-pinned to the validated build (coreapps 1.34.0, RefApp 2.13.x) so a
+    # `pull`/recreate can't silently swap the distro out from under the widget.
+    # `demo` is only a readable label here — the digest is authoritative, so this
+    # is not a rolling tag. Override OPENMRS_IMAGE to move to another release (#26).
+    image: ${OPENMRS_IMAGE:-openmrs/openmrs-reference-application-distro:demo@sha256:1088b9cb390665b2186790486bd41de05b8112ba397453b39e340ead9c3d9ad5}
     container_name: openmrs-app
     restart: unless-stopped
     depends_on:
