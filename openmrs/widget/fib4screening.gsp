@@ -58,6 +58,10 @@ jq(function(){
     // default — the refapp ships no referral order type — so the consult falls
     // back to the test-order path until one is configured (#30).
     var REFERRAL_ORDER_TYPE = null;
+    // Encounter role for encounter-provider attribution (GP-overridable). Default
+    // "Clinician"; many instances require at least one provider on an encounter,
+    // and it ties orders/deferrals to a provider role in the chart (#29).
+    var ENCOUNTER_ROLE = "240b26f9-dd88-4172-823d-4a8bfeb7841f";
     // Optional inpatient mapping (no universal default, so unset unless seeded):
     // when both are configured, an active visit of the inpatient visit type makes
     // orders use the inpatient care setting instead of always outpatient (#25).
@@ -103,12 +107,9 @@ jq(function(){
                 if(btnEl) btnEl.prop("disabled", false);
                 return;
             }
-            jq.getJSON(base + "/provider?user=" + userUuid + "&v=default", function(provData){
-                var ordererUuid = provData.results && provData.results.length > 0
-                    ? provData.results[0].uuid : null;
+            resolveOrderer(session, function(ordererUuid){
                 if(!ordererUuid){
-                    statusEl.html('<span style="color:red">No provider linked to current user. Cannot place order.</span>');
-                    if(btnEl) btnEl.prop("disabled", false);
+                    orderFail("No active provider linked to your account. Cannot place order.");
                     return;
                 }
                 statusEl.html('<span style="color:#888">Checking for active visit...</span>');
@@ -118,6 +119,8 @@ jq(function(){
                     var encPayload = {
                         patient: patientUuid,
                         encounterType: VISIT_NOTE,
+                        encounterDatetime: new Date().toISOString(),
+                        encounterProviders: [{ provider: ordererUuid, encounterRole: ENCOUNTER_ROLE }],
                         orders: [{
                             type: orderRestType,
                             action: "NEW",
@@ -176,7 +179,7 @@ jq(function(){
                         });
                     }
                 }).fail(function(){ orderFail("Could not check for an active visit."); });
-            }).fail(function(){ orderFail("Could not resolve your provider record."); });
+            });
         }).fail(function(){ orderFail("Could not read your session."); });
     }
 
@@ -234,26 +237,49 @@ jq(function(){
         });
     }
 
-    // ---- Record a "deferred / declined follow-up" decision as a text obs (#8) ----
+    // ---- Record a "deferred / declined follow-up" decision as an obs tied to an
+    // encounter + provider, so this CDS decline lands on the chart timeline with
+    // attribution rather than as a free-floating obs (#8, #29). ----
     function recordDeferral(statusEl, onSuccess){
         statusEl.html('<span style="color:#888">Recording...</span>');
-        jq.ajax({
-            url: base + "/obs",
-            type: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({
-                person: patientUuid,
-                concept: UUIDS.DEFERRED,
-                obsDatetime: new Date().toISOString(),
-                value: "deferred"
-            }),
-            success: function(){ if(onSuccess) onSuccess(); },
-            error: function(xhr){
-                var msg = "Could not record.";
-                try { msg = JSON.parse(xhr.responseText).error.message; } catch(e){}
-                statusEl.html('<span style="color:red">Error: ' + msg + '</span>');
-            }
-        });
+        var fail = function(msg){
+            statusEl.html('<span style="color:#c62828">' + (msg || 'Could not record the deferral.') + '</span>');
+        };
+        jq.getJSON(base + "/session", function(session){
+            resolveOrderer(session, function(providerUuid){
+                jq.getJSON(base + "/visit?patient=" + patientUuid + "&includeInactive=false&v=default", function(visitData){
+                    var visitUuid = (visitData.results && visitData.results.length > 0) ? visitData.results[0].uuid : null;
+                    var enc = {
+                        patient: patientUuid,
+                        encounterType: VISIT_NOTE,
+                        encounterDatetime: new Date().toISOString(),
+                        obs: [{ concept: UUIDS.DEFERRED, value: "deferred" }]
+                    };
+                    if(providerUuid) enc.encounterProviders = [{ provider: providerUuid, encounterRole: ENCOUNTER_ROLE }];
+                    var post = function(){
+                        jq.ajax({
+                            url: base + "/encounter", type: "POST", contentType: "application/json",
+                            data: JSON.stringify(enc),
+                            success: function(){ if(onSuccess) onSuccess(); },
+                            error: function(xhr){
+                                var msg = "Could not record.";
+                                try { msg = JSON.parse(xhr.responseText).error.message; } catch(e){}
+                                fail("Error: " + msg);
+                            }
+                        });
+                    };
+                    if(visitUuid){ enc.visit = visitUuid; post(); }
+                    else {
+                        jq.ajax({
+                            url: base + "/visit", type: "POST", contentType: "application/json",
+                            data: JSON.stringify({ patient: patientUuid, visitType: FACILITY_VISIT, startDatetime: new Date().toISOString() }),
+                            success: function(nv){ enc.visit = nv.uuid; post(); },
+                            error: function(){ fail("Could not start a visit; deferral not recorded."); }
+                        });
+                    }
+                }).fail(function(){ fail("Could not check for an active visit."); });
+            });
+        }).fail(function(){ fail("Could not read your session."); });
     }
 
     // Persist the FIB-4 score + risk category as obs for trending, deduped so a
@@ -341,6 +367,20 @@ jq(function(){
         if(m["mashmasld.visittype.facility"])      FACILITY_VISIT      = m["mashmasld.visittype.facility"];
         if(m["mashmasld.visittype.inpatient"])     INPATIENT_VISITTYPE = m["mashmasld.visittype.inpatient"];
         if(m["mashmasld.ordertype.referral"])      REFERRAL_ORDER_TYPE = m["mashmasld.ordertype.referral"];
+        if(m["mashmasld.encounterrole"])           ENCOUNTER_ROLE      = m["mashmasld.encounterrole"];
+    }
+
+    // Resolve the ordering/attribution provider: prefer the session's current
+    // provider (disambiguates a user with several provider records), else the
+    // first non-retired provider linked to the user; null if none (#29).
+    function resolveOrderer(session, cb){
+        if(session.currentProvider && session.currentProvider.uuid){ cb(session.currentProvider.uuid); return; }
+        var userUuid = session.user && session.user.uuid;
+        if(!userUuid){ cb(null); return; }
+        jq.getJSON(base + "/provider?user=" + userUuid + "&v=custom:(uuid,retired)", function(provData){
+            var active = ((provData && provData.results) || []).filter(function(p){ return !p.retired; });
+            cb(active.length ? active[0].uuid : null);
+        }).fail(function(){ cb(null); });
     }
 
     // Coerce an obs value to a finite positive number, else null (#12).
@@ -445,14 +485,9 @@ jq(function(){
                         return;
                     }
 
-                    jq.getJSON(base + "/provider?user=" + userUuid + "&v=default", function(provData){
-                        var ordererUuid = null;
-                        if(provData.results && provData.results.length > 0){
-                            ordererUuid = provData.results[0].uuid;
-                        }
+                    resolveOrderer(session, function(ordererUuid){
                         if(!ordererUuid){
-                            status.html('<span style="color:red">No provider linked to current user. Cannot place order.</span>');
-                            btn.prop("disabled", false).text("&#x2295; Order Missing Labs");
+                            mlFail("No active provider linked to your account. Cannot place order.");
                             return;
                         }
 
@@ -487,6 +522,8 @@ jq(function(){
                             var encounterPayload = {
                                 patient: patientUuid,
                                 encounterType: VISIT_NOTE,
+                                encounterDatetime: new Date().toISOString(),
+                                encounterProviders: [{ provider: ordererUuid, encounterRole: ENCOUNTER_ROLE }],
                                 orders: orders
                             };
                             if(visitUuid){
@@ -542,7 +579,7 @@ jq(function(){
                                 });
                             }
                         }).fail(function(){ mlFail("Could not check for an active visit."); });
-                    }).fail(function(){ mlFail("Could not resolve your provider record."); });
+                    });
                 }).fail(function(){ mlFail("Could not read your session."); });
                 });
             }).fail(function(){

@@ -45,6 +45,8 @@ GP=(
   "mashmasld.caresetting.outpatient=6f0c9a92-6f24-11e3-af88-005056821db0"
   "mashmasld.encountertype.visitnote=d7151f82-c1f3-4152-a605-2f9ea7414a79"
   "mashmasld.visittype.facility=7b0f5697-27e3-40c4-8bae-f4049abfb4ed"
+  # Encounter role for order/deferral provider attribution — Clinician (#29)
+  "mashmasld.encounterrole=240b26f9-dd88-4172-823d-4a8bfeb7841f"
   # Optional inpatient mapping — no universal default, so seed only on instances
   # that have them; when both are set the widget picks the inpatient care setting
   # for orders placed on an active inpatient visit (#25):
