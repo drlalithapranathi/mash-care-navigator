@@ -89,6 +89,12 @@ jq(function(){
         var useReferral   = orderDef.isReferral && REFERRAL_ORDER_TYPE;
         var orderRestType = useReferral ? "order" : "testorder";
         var orderTypeUuid = useReferral ? REFERRAL_ORDER_TYPE : TEST_ORDER_TYPE;
+        // On any pre-order GET failure, surface the error and re-enable the
+        // button so it can't wedge on "Ordering..." (#14).
+        function orderFail(msg){
+            statusEl.html('<span style="color:#c62828">' + (msg || 'Order failed &mdash; could not reach the server.') + ' Please retry.</span>');
+            if(btnEl) btnEl.prop("disabled", false).html("&#x2295; Place Order");
+        }
         statusEl.html('<span style="color:#888">Checking session...</span>');
         jq.getJSON(base + "/session", function(session){
             var userUuid = session.user ? session.user.uuid : null;
@@ -169,9 +175,9 @@ jq(function(){
                             }
                         });
                     }
-                });
-            });
-        });
+                }).fail(function(){ orderFail("Could not check for an active visit."); });
+            }).fail(function(){ orderFail("Could not resolve your provider record."); });
+        }).fail(function(){ orderFail("Could not read your session."); });
     }
 
     // Render a single risk-level order action row (with active-order check)
@@ -424,6 +430,12 @@ jq(function(){
                 var status = jq("#fib4-order-status");
                 btn.prop("disabled", true).text("Ordering...");
                 status.html('<span style="color:#888">Checking session...</span>');
+                // Re-enable the button and show the error on any pre-order GET
+                // failure, so it can't wedge on "Ordering..." (#14).
+                var mlFail = function(msg){
+                    status.html('<span style="color:#c62828">' + (msg || 'Order failed &mdash; could not reach the server.') + ' Please retry.</span>');
+                    btn.prop("disabled", false).html("&#x2295; Order Missing Labs");
+                };
 
                 jq.getJSON(base + "/session", function(session){
                     var userUuid = session.user ? session.user.uuid : null;
@@ -529,10 +541,14 @@ jq(function(){
                                     }
                                 });
                             }
-                        });
-                    });
+                        }).fail(function(){ mlFail("Could not check for an active visit."); });
+                    }).fail(function(){ mlFail("Could not resolve your provider record."); });
+                }).fail(function(){ mlFail("Could not read your session."); });
                 });
-                });
+            }).fail(function(){
+                el.html('<div style="padding:10px;color:#999;font-size:13px">Could not check existing lab orders. ' +
+                    '<a href="#" id="fib4-ordercheck-retry" style="color:#009384;font-weight:600">Retry</a></div>');
+                jq("#fib4-ordercheck-retry").on("click", function(e){ e.preventDefault(); loadLabsAndRender(); });
             });
 
             return;
