@@ -50,6 +50,10 @@ GP=(
   # for orders placed on an active inpatient visit (#25):
   #   "mashmasld.caresetting.inpatient=<uuid>"
   #   "mashmasld.visittype.inpatient=<uuid>"
+  # Referral order type for the GI/Hep consult (#30). Set this to the referral
+  # order type created by seed-concepts.sh; unset, the consult falls back to the
+  # test-order path:
+  #   "mashmasld.ordertype.referral=<uuid>"
 )
 
 fail=0

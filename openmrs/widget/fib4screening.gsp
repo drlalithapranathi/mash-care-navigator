@@ -38,7 +38,7 @@ jq(function(){
                    icon: "&#x1F4DD;" },
         CONSULT: { uuid: "f682c646-b597-4cd4-8282-4191e0eb040b", label: "Gastroenterology / Hepatology consult",
                    sublabel: "High-risk MASLD &middot; possible advanced fibrosis / cirrhosis",
-                   icon: "&#x1F6A8;" }
+                   icon: "&#x1F6A8;", isReferral: true }
     };
 
     var LAB_NAMES = {
@@ -54,6 +54,10 @@ jq(function(){
     var OUTPATIENT        = "6f0c9a92-6f24-11e3-af88-005056821db0";
     var VISIT_NOTE        = "d7151f82-c1f3-4152-a605-2f9ea7414a79";
     var FACILITY_VISIT    = "7b0f5697-27e3-40c4-8bae-f4049abfb4ed";
+    // Referral/consult order type (GP mashmasld.ordertype.referral). Unset by
+    // default — the refapp ships no referral order type — so the consult falls
+    // back to the test-order path until one is configured (#30).
+    var REFERRAL_ORDER_TYPE = null;
     // Optional inpatient mapping (no universal default, so unset unless seeded):
     // when both are configured, an active visit of the inpatient visit type makes
     // orders use the inpatient care setting instead of always outpatient (#25).
@@ -77,8 +81,14 @@ jq(function(){
         return (age != null && age >= 65) ? FIB4_LOWER_OVER65 : FIB4_LOWER_DEFAULT;
     }
 
-    // ---- Reusable order placement (single concept) ----
-    function placeOrderForConcept(conceptUuid, label, statusEl, btnEl, onSuccess){
+    // ---- Reusable order placement (single concept). A referral order (the
+    // GI/Hep consult) goes under the referral order type as a plain order, not
+    // the test-order path, when a referral order type is configured (#30). ----
+    function placeOrderForConcept(orderDef, statusEl, btnEl, onSuccess){
+        var conceptUuid = orderDef.uuid, label = orderDef.label;
+        var useReferral   = orderDef.isReferral && REFERRAL_ORDER_TYPE;
+        var orderRestType = useReferral ? "order" : "testorder";
+        var orderTypeUuid = useReferral ? REFERRAL_ORDER_TYPE : TEST_ORDER_TYPE;
         statusEl.html('<span style="color:#888">Checking session...</span>');
         jq.getJSON(base + "/session", function(session){
             var userUuid = session.user ? session.user.uuid : null;
@@ -103,13 +113,13 @@ jq(function(){
                         patient: patientUuid,
                         encounterType: VISIT_NOTE,
                         orders: [{
-                            type: "testorder",
+                            type: orderRestType,
                             action: "NEW",
                             patient: patientUuid,
                             concept: conceptUuid,
                             careSetting: careSettingForVisit(visitData.results && visitData.results[0]),
                             orderer: ordererUuid,
-                            orderType: TEST_ORDER_TYPE
+                            orderType: orderTypeUuid
                         }]
                     };
 
@@ -212,7 +222,7 @@ jq(function(){
 
         btnEl.on("click", function(){
             btnEl.prop("disabled", true).text("Ordering...");
-            placeOrderForConcept(row.def.uuid, row.def.label, statusEl, btnEl, function(){
+            placeOrderForConcept(row.def, statusEl, btnEl, function(){
                 btnEl.css({"background":"#bdbdbd","cursor":"not-allowed"}).text("Ordered");
             });
         });
@@ -324,6 +334,7 @@ jq(function(){
         if(m["mashmasld.encountertype.visitnote"]) VISIT_NOTE          = m["mashmasld.encountertype.visitnote"];
         if(m["mashmasld.visittype.facility"])      FACILITY_VISIT      = m["mashmasld.visittype.facility"];
         if(m["mashmasld.visittype.inpatient"])     INPATIENT_VISITTYPE = m["mashmasld.visittype.inpatient"];
+        if(m["mashmasld.ordertype.referral"])      REFERRAL_ORDER_TYPE = m["mashmasld.ordertype.referral"];
     }
 
     // Coerce an obs value to a finite positive number, else null (#12).
