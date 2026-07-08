@@ -3,7 +3,8 @@
   "datatypes": {
     "n_a":     "8d4a4c94-c2cc-11de-8d13-0010c6dffd0f",
     "numeric": "8d4a4488-c2cc-11de-8d13-0010c6dffd0f",
-    "text":    "8d4a4ab4-c2cc-11de-8d13-0010c6dffd0f"
+    "text":    "8d4a4ab4-c2cc-11de-8d13-0010c6dffd0f",
+    "date":    "8d4a505e-c2cc-11de-8d13-0010c6dffd0f"
   },
   "concept_classes": {
     "test":       "8d4907b2-c2cc-11de-8d13-0010c6dffd0f",
@@ -100,6 +101,28 @@
       "description": "FIB-4 risk band recorded at screening: low / intermediate / high.",
       "concept_class": "finding",
       "datatype": "text",
+      "loinc_code": null,
+      "loinc_name": null
+    },
+    {
+      "key": "deferral_reason",
+      "uuid": "99c8726a-e9cd-461f-b6f6-cd9cc0a166e1",
+      "fully_specified_name": "MASLD screening deferral reason",
+      "short_name": "MASLD deferral reason",
+      "description": "Why the recommended MASLD (FIB-4) follow-up was deferred at this encounter (e.g. declined, awaiting other workup, comorbidity priority).",
+      "concept_class": "finding",
+      "datatype": "text",
+      "loinc_code": null,
+      "loinc_name": null
+    },
+    {
+      "key": "deferral_followup",
+      "uuid": "f45d680b-811d-4955-aa5f-0d1a925f1cbc",
+      "fully_specified_name": "MASLD screening follow-up due date",
+      "short_name": "MASLD follow-up due",
+      "description": "Date by which a deferred MASLD (FIB-4) recommendation should be revisited; the widget re-surfaces the recommendation on or after this date.",
+      "concept_class": "finding",
+      "datatype": "date",
       "loinc_code": null,
       "loinc_name": null
     }

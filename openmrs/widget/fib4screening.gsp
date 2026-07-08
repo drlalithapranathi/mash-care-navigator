@@ -18,6 +18,8 @@ jq(function(){
         ALT:  "29a09214-cfd4-4db9-898e-f2a3e6f08feb",
         PLAT: "8575950e-90bf-4530-9595-deebbdf2cdde",
         DEFERRED: "87fcf943-1e0c-4b09-8771-23cae2affda3",
+        DEFERRAL_REASON: "99c8726a-e9cd-461f-b6f6-cd9cc0a166e1",
+        DEFERRAL_FOLLOWUP: "f45d680b-811d-4955-aa5f-0d1a925f1cbc",
         FIB4_SCORE: "fd064e9b-a811-412d-9000-b7134db9d020",
         FIB4_CATEGORY: "a27e88f2-ab54-434c-952b-be714d1af6b0"
     };
@@ -240,7 +242,8 @@ jq(function(){
     // ---- Record a "deferred / declined follow-up" decision as an obs tied to an
     // encounter + provider, so this CDS decline lands on the chart timeline with
     // attribution rather than as a free-floating obs (#8, #29). ----
-    function recordDeferral(statusEl, onSuccess){
+    function recordDeferral(statusEl, opts, onSuccess){
+        opts = opts || {};
         statusEl.html('<span style="color:#888">Recording...</span>');
         var fail = function(msg){
             statusEl.html('<span style="color:#c62828">' + (msg || 'Could not record the deferral.') + '</span>');
@@ -249,11 +252,14 @@ jq(function(){
             resolveOrderer(session, function(providerUuid){
                 jq.getJSON(base + "/visit?patient=" + patientUuid + "&includeInactive=false&v=default", function(visitData){
                     var visitUuid = (visitData.results && visitData.results.length > 0) ? visitData.results[0].uuid : null;
+                    var obs = [{ concept: UUIDS.DEFERRED, value: "deferred" }];
+                    if(opts.reason)       obs.push({ concept: UUIDS.DEFERRAL_REASON,   value: opts.reason });
+                    if(opts.followupDate) obs.push({ concept: UUIDS.DEFERRAL_FOLLOWUP, value: opts.followupDate });
                     var enc = {
                         patient: patientUuid,
                         encounterType: VISIT_NOTE,
                         encounterDatetime: new Date().toISOString(),
-                        obs: [{ concept: UUIDS.DEFERRED, value: "deferred" }]
+                        obs: obs
                     };
                     if(providerUuid) enc.encounterProviders = [{ provider: providerUuid, encounterRole: ENCOUNTER_ROLE }];
                     var post = function(){
@@ -304,26 +310,54 @@ jq(function(){
         });
     }
 
-    // Wire the "defer follow-up" link and surface any prior deferral on load.
+    // Wire the "defer follow-up" control and re-surface an outstanding deferral:
+    // due again on/after the follow-up date, else "deferred until <date>" (#37).
     function attachDeferLink(){
         var link = jq("#fib4-defer-link");
         if(!link.length) return;
         var statusEl = jq("#fib4-defer-status");
+        var form = jq("#fib4-defer-form");
 
-        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.DEFERRED + "&v=full", function(data){
-            var results = ((data && data.results) || []).filter(function(o){ return !o.voided && o.value; });
-            if(results.length){
-                results.sort(function(a,b){ return new Date(b.obsDatetime) - new Date(a.obsDatetime); });
-                var d = new Date(results[0].obsDatetime);
-                statusEl.html('<span style="color:#777">&#x23F8; Deferred on ' + d.toLocaleDateString() + '</span>');
+        function latestVal(data){
+            var r = ((data && data.results) || []).filter(function(o){ return !o.voided && o.value != null && o.value !== ""; });
+            r.sort(function(a,b){ return new Date(b.obsDatetime) - new Date(a.obsDatetime); });
+            return r.length ? r[0] : null;
+        }
+        jq.when(
+            jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.DEFERRED + "&v=full"),
+            jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.DEFERRAL_FOLLOWUP + "&v=full"),
+            jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.DEFERRAL_REASON + "&v=full")
+        ).done(function(defResp, dueResp, rsnResp){
+            var def = latestVal(defResp[0]);
+            if(!def) return;
+            var due = latestVal(dueResp[0]);
+            var rsn = latestVal(rsnResp[0]);
+            var reasonTxt = rsn ? (' &middot; ' + rsn.value) : '';
+            var deferredOn = new Date(def.obsDatetime).toLocaleDateString();
+            if(due){
+                var dueDate = new Date(due.value);
+                var today = new Date(); today.setHours(0,0,0,0);
+                var dueMid = new Date(dueDate); dueMid.setHours(0,0,0,0);
+                if(today.getTime() >= dueMid.getTime()){
+                    statusEl.html('<span style="color:#b71c1c;font-weight:600">&#x26A0; Follow-up due (was ' + dueDate.toLocaleDateString() + ', deferred ' + deferredOn + reasonTxt + ')</span>');
+                } else {
+                    statusEl.html('<span style="color:#777">&#x23F8; Deferred until ' + dueDate.toLocaleDateString() + reasonTxt + '</span>');
+                }
+            } else {
+                statusEl.html('<span style="color:#777">&#x23F8; Deferred on ' + deferredOn + reasonTxt + '</span>');
             }
         });
 
-        link.on("click", function(e){
-            e.preventDefault();
+        link.on("click", function(e){ e.preventDefault(); form.toggle(); });
+        jq("#fib4-defer-confirm").on("click", function(){
+            var reason = jq("#fib4-defer-reason").val();
+            var months = parseInt(jq("#fib4-defer-when").val(), 10) || 3;
+            var d = new Date(); d.setMonth(d.getMonth() + months);
+            var followupDate = d.toISOString().slice(0, 10);   // YYYY-MM-DD for a Date obs
             link.css({"pointer-events":"none","opacity":"0.5"});
-            recordDeferral(statusEl, function(){
-                statusEl.html('<span style="color:#777;font-weight:600">&#x23F8; Follow-up deferred</span>');
+            form.hide();
+            recordDeferral(statusEl, { reason: reason, followupDate: followupDate }, function(){
+                statusEl.html('<span style="color:#777;font-weight:600">&#x23F8; Follow-up deferred until ' + d.toLocaleDateString() + '</span>');
                 link.hide();
             });
         });
@@ -352,6 +386,8 @@ jq(function(){
         if(m["mashmasld.concept.alt"])   UUIDS.ALT  = m["mashmasld.concept.alt"];
         if(m["mashmasld.concept.plat"])  UUIDS.PLAT = m["mashmasld.concept.plat"];
         if(m["mashmasld.concept.deferred"]) UUIDS.DEFERRED = m["mashmasld.concept.deferred"];
+        if(m["mashmasld.concept.deferralreason"])   UUIDS.DEFERRAL_REASON   = m["mashmasld.concept.deferralreason"];
+        if(m["mashmasld.concept.deferralfollowup"]) UUIDS.DEFERRAL_FOLLOWUP = m["mashmasld.concept.deferralfollowup"];
         if(m["mashmasld.concept.fib4score"])    UUIDS.FIB4_SCORE    = m["mashmasld.concept.fib4score"];
         if(m["mashmasld.concept.fib4category"]) UUIDS.FIB4_CATEGORY = m["mashmasld.concept.fib4category"];
         if(m["mashmasld.order.cbc"])     ORDER_PANELS.CBC.uuid     = m["mashmasld.order.cbc"];
@@ -663,6 +699,22 @@ jq(function(){
             '<div style="margin-top:4px">' +
             '<a href="#" id="fib4-defer-link" style="font-size:11px;color:#777;text-decoration:underline">Not now &mdash; defer follow-up</a>' +
             ' <span id="fib4-defer-status" style="font-size:11px;margin-left:6px"></span>' +
+            '<div id="fib4-defer-form" style="display:none;margin-top:6px;font-size:11px;color:#555">' +
+                '<label style="display:block;margin-bottom:3px">Reason ' +
+                    '<select id="fib4-defer-reason" style="font-size:11px">' +
+                        '<option value="Declined by patient">Declined by patient</option>' +
+                        '<option value="Awaiting other workup">Awaiting other workup</option>' +
+                        '<option value="Comorbidity takes priority">Comorbidity takes priority</option>' +
+                        '<option value="Other">Other</option>' +
+                    '</select></label>' +
+                '<label style="display:block;margin-bottom:3px">Revisit in ' +
+                    '<select id="fib4-defer-when" style="font-size:11px">' +
+                        '<option value="1">1 month</option>' +
+                        '<option value="3" selected>3 months</option>' +
+                        '<option value="6">6 months</option>' +
+                    '</select></label>' +
+                '<button id="fib4-defer-confirm" style="font-size:11px;padding:3px 8px;cursor:pointer">Confirm defer</button>' +
+            '</div>' +
             '</div>';
 
         if(levelKey === "intermediate"){
