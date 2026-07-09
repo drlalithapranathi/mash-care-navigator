@@ -48,6 +48,8 @@ ELF="cd75cf42-ef4b-4d15-9ea4-ea12eca9e568"
 CONSULT="f682c646-b597-4cd4-8282-4191e0eb040b"
 CBC="30b29cc7-3565-11f1-a0a1-92c09ef48e9b"
 HEPATIC="353d3e7b-3565-11f1-a0a1-92c09ef48e9b"
+HCC_US="a6a9a2d3-44a8-4207-91cd-9123c161302d"
+VARICEAL="d47f8344-d5e9-4288-a40c-27d3484c22a7"
 
 # ---- 1. Referral order type ----
 REFERRAL_NAME="MASLD Referral"
@@ -112,6 +114,8 @@ check "$VCTE"    "$TEST_ORDER_TYPE" "VCTE under Test Order"
 check "$ELF"     "$TEST_ORDER_TYPE" "ELF under Test Order"
 check "$CBC"     "$TEST_ORDER_TYPE" "CBC under Test Order"
 check "$HEPATIC" "$TEST_ORDER_TYPE" "Hepatic under Test Order"
+check "$HCC_US"  "$TEST_ORDER_TYPE" "HCC surveillance US under Test Order"
+check "$VARICEAL" "$TEST_ORDER_TYPE" "Variceal EGD under Test Order"
 check "$CONSULT" "$referral_uuid"   "Consult under referral"
 
 [ "$fail" -eq 0 ] || { echo "${fail} orderable(s) not orderable under their order type." >&2; exit 1; }

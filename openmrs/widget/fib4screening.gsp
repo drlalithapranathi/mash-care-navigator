@@ -28,7 +28,10 @@ jq(function(){
         ETIOLOGY_HBSAG: "ffb98eae-36bc-42fc-8b23-778279f1b6a1",
         ETIOLOGY_HCV:   "a137efb7-da31-415d-9099-8f6796fc4b66",
         ETIOLOGY_ALCOHOL: "13c620ba-c36f-40b5-9a4a-b665a71054e2",
-        ETIOLOGY_DETERMINATION: "a59ede5b-4d22-447d-ae5f-7c240e8fa462"
+        ETIOLOGY_DETERMINATION: "a59ede5b-4d22-447d-ae5f-7c240e8fa462",
+        VCTE_RESULT: "0247db37-907a-4f78-9988-7d82c4223d29",
+        ELF_RESULT:  "05f0f138-48ef-4ad7-bf85-885a54b55c2d",
+        RESCREEN_DUE: "f1917f7b-4691-4745-bb84-00ae83a4ebc8"
     };
 
     // Orderable panel concept UUIDs (LOINC-mapped) - missing-labs ordering
@@ -47,7 +50,14 @@ jq(function(){
                    icon: "&#x1F4DD;" },
         CONSULT: { uuid: "f682c646-b597-4cd4-8282-4191e0eb040b", label: "Gastroenterology / Hepatology consult",
                    sublabel: "High-risk MASLD &middot; possible advanced fibrosis / cirrhosis",
-                   icon: "&#x1F6A8;", isReferral: true }
+                   icon: "&#x1F6A8;", isReferral: true },
+        // Suspected-cirrhosis surveillance orderables (#38)
+        HCC_US:  { uuid: "a6a9a2d3-44a8-4207-91cd-9123c161302d", label: "HCC surveillance ultrasound + AFP",
+                   sublabel: "Suspected cirrhosis &middot; liver US &plusmn; AFP q6 months",
+                   icon: "&#x1FA7A;" },
+        VARICEAL:{ uuid: "d47f8344-d5e9-4288-a40c-27d3484c22a7", label: "Variceal screening endoscopy (EGD)",
+                   sublabel: "Suspected cirrhosis &middot; screen for gastroesophageal varices",
+                   icon: "&#x1FA7A;" }
     };
 
     var LAB_NAMES = {
@@ -410,6 +420,11 @@ jq(function(){
         if(m["mashmasld.order.vcte"])    RISK_ORDERS.VCTE.uuid     = m["mashmasld.order.vcte"];
         if(m["mashmasld.order.elf"])     RISK_ORDERS.ELF.uuid      = m["mashmasld.order.elf"];
         if(m["mashmasld.order.consult"]) RISK_ORDERS.CONSULT.uuid  = m["mashmasld.order.consult"];
+        if(m["mashmasld.order.hccus"])    RISK_ORDERS.HCC_US.uuid   = m["mashmasld.order.hccus"];
+        if(m["mashmasld.order.variceal"]) RISK_ORDERS.VARICEAL.uuid = m["mashmasld.order.variceal"];
+        if(m["mashmasld.concept.vcteresult"])  UUIDS.VCTE_RESULT  = m["mashmasld.concept.vcteresult"];
+        if(m["mashmasld.concept.elfresult"])   UUIDS.ELF_RESULT   = m["mashmasld.concept.elfresult"];
+        if(m["mashmasld.concept.rescreendue"]) UUIDS.RESCREEN_DUE = m["mashmasld.concept.rescreendue"];
         // Ordering metadata UUIDs (#25).
         if(m["mashmasld.ordertype.test"])          TEST_ORDER_TYPE     = m["mashmasld.ordertype.test"];
         if(m["mashmasld.caresetting.outpatient"])  OUTPATIENT          = m["mashmasld.caresetting.outpatient"];
@@ -486,6 +501,36 @@ jq(function(){
         return { status: "unexcluded", label: "" };
     }
 
+    // Ingest a VCTE/ELF result to re-stratify an indeterminate FIB-4 (#38).
+    // VCTE: <8 low, 8-12 indeterminate, >12 advanced. ELF: <7.7 / 7.7-9.8 / >=9.8.
+    function restratify(vcte, elf){
+        if(vcte != null){
+            if(vcte > 12) return { level:"advanced", note:"VCTE " + vcte + " kPa &rarr; advanced fibrosis (F3&ndash;4), suspect cirrhosis" };
+            if(vcte >= 8) return { level:"indeterminate", note:"VCTE " + vcte + " kPa &rarr; indeterminate (8&ndash;12 kPa)" };
+            return { level:"low", note:"VCTE " + vcte + " kPa &rarr; low stiffness (&lt;8 kPa)" };
+        }
+        if(elf != null){
+            if(elf >= 9.8) return { level:"advanced", note:"ELF " + elf + " &rarr; advanced fibrosis, suspect cirrhosis" };
+            if(elf >= 7.7) return { level:"indeterminate", note:"ELF " + elf + " &rarr; indeterminate (7.7&ndash;9.8)" };
+            return { level:"low", note:"ELF " + elf + " &rarr; low (&lt;7.7)" };
+        }
+        return null;
+    }
+
+    // Record/refresh a low-risk FIB-4 rescreen-due date, deduped so a repeat view
+    // doesn't spam obs; returns the effective due date (#38).
+    function persistRescreenDue(existingObs, years){
+        if(existingObs && existingObs.value){
+            var existing = new Date(existingObs.value);
+            if(existing.getTime() > new Date().getTime()) return existingObs.value;   // still pending — keep it
+        }
+        var due = new Date(); due.setFullYear(due.getFullYear() + years);
+        var val = due.toISOString().slice(0, 10);
+        jq.ajax({ url: base + "/obs", type: "POST", contentType: "application/json",
+            data: JSON.stringify({ person: patientUuid, concept: UUIDS.RESCREEN_DUE, obsDatetime: new Date().toISOString(), value: val }) });
+        return val;
+    }
+
     function loadLabsAndRender(){
     jq.when(
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.AST  + "&v=full"),
@@ -497,8 +542,11 @@ jq(function(){
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_HBSAG + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_HCV + "&v=full"),
         jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_ALCOHOL + "&v=full"),
-        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_DETERMINATION + "&v=full")
-    ).done(function(astResp, altResp, platResp, hba1cResp, bmiResp, condResp, hbsagResp, hcvResp, alcoholResp, determResp){
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ETIOLOGY_DETERMINATION + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.VCTE_RESULT + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.ELF_RESULT + "&v=full"),
+        jq.getJSON(base + "/obs?patient=" + patientUuid + "&concept=" + UUIDS.RESCREEN_DUE + "&v=full")
+    ).done(function(astResp, altResp, platResp, hba1cResp, bmiResp, condResp, hbsagResp, hcvResp, alcoholResp, determResp, vcteResp, elfResp, rescreenResp){
         var astObs  = pickLatestObs(astResp);
         var altObs  = pickLatestObs(altResp);
         var platObs = pickLatestObs(platResp);
@@ -515,6 +563,10 @@ jq(function(){
         var hcvVal     = hcvObs ? String(hcvObs.value) : null;
         var alcoholVal = (alcObs && alcObs.value != null) ? Number(alcObs.value) : null;
         var determVal  = determObs ? String(determObs.value) : null;
+        var vcteObs = pickLatestObs(vcteResp), elfObs = pickLatestObs(elfResp);
+        var vcteVal = (vcteObs && vcteObs.value != null) ? Number(vcteObs.value) : null;
+        var elfVal  = (elfObs  && elfObs.value  != null) ? Number(elfObs.value)  : null;
+        var rescreenObs = pickLatestObs(rescreenResp);
 
         var el = jq("#fib4-screening-widget");
 
@@ -843,16 +895,54 @@ jq(function(){
             '</div>' +
             '</div>';
 
-        if(levelKey === "intermediate"){
+        // #38: cardiometabolic decision support (AASLD/AGA treat it as inseparable).
+        var cardiometabolicHtml =
+            '<div style="margin-top:8px;padding:8px;background:#e3f2fd;border-left:3px solid #1565c0;border-radius:4px;font-size:11px;color:#0d47a1">' +
+            '<strong>Cardiometabolic care</strong>: assess ASCVD risk (statins are safe and indicated in MASLD), weight loss / consider GLP-1 or resmetirom, alcohol reduction, and HBV vaccination if non-immune.</div>';
+
+        // #38: re-stratify from a VCTE/ELF result if one is on file.
+        var restrat = restratify(vcteVal, elfVal);
+        var restratNote = restrat
+            ? '<div style="margin-top:8px;padding:6px 8px;background:#f3e5f5;border-left:3px solid #6a1b9a;border-radius:4px;font-size:11px;color:#4a148c">Elastography / ELF: ' + restrat.note + '</div>'
+            : '';
+        var suspectCirrhosis = (levelKey === "high") || (restrat && restrat.level === "advanced");
+
+        // Surveillance orderables for suspected cirrhosis (HCC US + AFP, variceal EGD).
+        function surveillanceHtml(colors){
+            var rowUs  = renderRiskAction(RISK_ORDERS.HCC_US, colors);
+            var rowEgd = renderRiskAction(RISK_ORDERS.VARICEAL, colors);
+            riskActionsRows.push(rowUs, rowEgd);
+            return '<div style="font-size:11px;font-weight:700;color:' + colors.text + ';text-transform:uppercase;letter-spacing:0.5px;margin:8px 0 6px">Suspected cirrhosis &middot; surveillance</div>' +
+                   rowUs.html + rowEgd.html;
+        }
+
+        if(levelKey === "low"){
+            var soonRescreen = /diabet|metabolic|prediab|obes|overweight/i.test(indicationLabel || "");
+            var rescreenYears = soonRescreen ? 2 : 3;
+            var dueVal = persistRescreenDue(rescreenObs, rescreenYears);
+            var dueStr = dueVal ? new Date(dueVal).toLocaleDateString() : "";
+            riskActionsHtml =
+                '<div style="margin-top:10px;padding:8px;background:#e8f5e9;border-left:3px solid #2e7d32;border-radius:4px">' +
+                '<div style="font-size:11px;font-weight:700;color:#1b5e20;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Low risk &middot; rescreen</div>' +
+                '<div style="font-size:12px;color:#333">Repeat FIB-4 in ' + rescreenYears + ' years' + (soonRescreen ? ' (sooner given metabolic risk)' : '') +
+                (dueStr ? ' &mdash; due ' + dueStr : '') + '.</div>' +
+                '</div>' + cardiometabolicHtml;
+        }
+        else if(levelKey === "intermediate"){
             var colorsAmber = { border: "#ffb74d", text: "#bf360c", btnBg: "#e65100" };
-            var rowVcte = renderRiskAction(RISK_ORDERS.VCTE, colorsAmber);
-            var rowElf  = renderRiskAction(RISK_ORDERS.ELF,  colorsAmber);
-            riskActionsRows.push(rowVcte, rowElf);
             riskActionsHtml =
                 '<div style="margin-top:10px;padding:8px;background:#fff8e1;border-left:3px solid #e65100;border-radius:4px">' +
-                '<div style="font-size:11px;font-weight:700;color:#bf360c;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Recommended actions &middot; FIB-4 ' + lowerCutoff.toFixed(1) + '&ndash;' + FIB4_UPPER + '</div>' +
-                rowVcte.html + rowElf.html + deferLinkHtml +
-                '</div>';
+                '<div style="font-size:11px;font-weight:700;color:#bf360c;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Recommended actions &middot; FIB-4 ' + lowerCutoff.toFixed(1) + '&ndash;' + FIB4_UPPER + '</div>';
+            if(restrat && restrat.level === "low"){
+                riskActionsHtml += '<div style="font-size:12px;color:#2e7d32">Elastography reassuring &mdash; downgrade; rescreen per interval.</div>';
+            } else {
+                var rowVcte = renderRiskAction(RISK_ORDERS.VCTE, colorsAmber);
+                var rowElf  = renderRiskAction(RISK_ORDERS.ELF,  colorsAmber);
+                riskActionsRows.push(rowVcte, rowElf);
+                riskActionsHtml += rowVcte.html + rowElf.html;
+            }
+            if(suspectCirrhosis) riskActionsHtml += surveillanceHtml(colorsAmber);
+            riskActionsHtml += restratNote + cardiometabolicHtml + deferLinkHtml + '</div>';
         }
         else if(levelKey === "high"){
             var colorsRed = { border: "#ef5350", text: "#b71c1c", btnBg: "#c62828" };
@@ -861,7 +951,7 @@ jq(function(){
             riskActionsHtml =
                 '<div style="margin-top:10px;padding:8px;background:#ffebee;border-left:3px solid #c62828;border-radius:4px">' +
                 '<div style="font-size:11px;font-weight:700;color:#b71c1c;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Urgent &middot; recommended action &middot; FIB-4 &gt;' + FIB4_UPPER + '</div>' +
-                rowConsult.html + deferLinkHtml +
+                rowConsult.html + surveillanceHtml(colorsRed) + restratNote + cardiometabolicHtml + deferLinkHtml +
                 '</div>';
         }
 

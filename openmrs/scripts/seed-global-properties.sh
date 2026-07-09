@@ -49,6 +49,11 @@ GP=(
   "mashmasld.order.vcte=cb9450cf-bb90-4600-9116-b7c1ab8ee5b3"
   "mashmasld.order.elf=cd75cf42-ef4b-4d15-9ea4-ea12eca9e568"
   "mashmasld.order.consult=f682c646-b597-4cd4-8282-4191e0eb040b"
+  "mashmasld.order.hccus=a6a9a2d3-44a8-4207-91cd-9123c161302d"
+  "mashmasld.order.variceal=d47f8344-d5e9-4288-a40c-27d3484c22a7"
+  "mashmasld.concept.vcteresult=0247db37-907a-4f78-9988-7d82c4223d29"
+  "mashmasld.concept.elfresult=05f0f138-48ef-4ad7-bf85-885a54b55c2d"
+  "mashmasld.concept.rescreendue=f1917f7b-4691-4745-bb84-00ae83a4ebc8"
   # Ordering metadata UUIDs — refapp defaults (mirror widget/fib4screening.gsp) (#25)
   "mashmasld.ordertype.test=52a447d3-a64a-11e3-9aeb-50e549534c5e"
   "mashmasld.caresetting.outpatient=6f0c9a92-6f24-11e3-af88-005056821db0"
