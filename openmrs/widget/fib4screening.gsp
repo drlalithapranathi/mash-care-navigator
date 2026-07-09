@@ -1,7 +1,17 @@
 <!-- mash-fib4-widget 1.1.0 · patched into coreapps-1.34.0 · see openmrs/widget/VERSION (#28) -->
-<div id="fib4-screening-widget">
+<style>
+  /* #39: visible focus ring, ~44px touch targets, link-style buttons, AA colors */
+  #fib4-screening-widget button:focus-visible,
+  #fib4-screening-widget a:focus-visible,
+  #fib4-screening-widget select:focus-visible { outline: 3px solid #1565c0; outline-offset: 2px; }
+  #fib4-screening-widget .mash-action { min-height: 2.75rem; }
+  #fib4-screening-widget .mash-linkbtn { background: none; border: none; padding: 0; font: inherit;
+    color: #00695c; text-decoration: underline; cursor: pointer; }
+  @media (prefers-reduced-motion: reduce) { #fib4-screening-widget * { transition: none !important; } }
+</style>
+<div id="fib4-screening-widget" role="region" aria-label="FIB-4 MASLD fibrosis screening" aria-live="polite">
     <div style="padding:10px">
-        <span style="color:#888">Loading FIB-4...</span>
+        <span style="color:#595959">Loading FIB-4&hellip;</span>
     </div>
 </div>
 
@@ -118,7 +128,7 @@ jq(function(){
             statusEl.html('<span style="color:#c62828">' + (msg || 'Order failed &mdash; could not reach the server.') + ' Please retry.</span>');
             if(btnEl) btnEl.prop("disabled", false).html("&#x2295; Place Order");
         }
-        statusEl.html('<span style="color:#888">Checking session...</span>');
+        statusEl.html('<span style="color:#595959">Checking session...</span>');
         jq.getJSON(base + "/session", function(session){
             var userUuid = session.user ? session.user.uuid : null;
             if(!userUuid){
@@ -131,7 +141,7 @@ jq(function(){
                     orderFail("No active provider linked to your account. Cannot place order.");
                     return;
                 }
-                statusEl.html('<span style="color:#888">Checking for active visit...</span>');
+                statusEl.html('<span style="color:#595959">Checking for active visit...</span>');
                 jq.getJSON(base + "/visit?patient=" + patientUuid + "&includeInactive=false&v=default", function(visitData){
                     var visitUuid = (visitData.results && visitData.results.length > 0) ? visitData.results[0].uuid : null;
 
@@ -152,7 +162,7 @@ jq(function(){
                     };
 
                     var doPost = function(){
-                        statusEl.html('<span style="color:#888">Placing order...</span>');
+                        statusEl.html('<span style="color:#595959">Placing order...</span>');
                         jq.ajax({
                             url: base + "/encounter",
                             type: "POST",
@@ -177,7 +187,7 @@ jq(function(){
                         encPayload.visit = visitUuid;
                         doPost();
                     } else {
-                        statusEl.html('<span style="color:#888">No active visit. Creating visit...</span>');
+                        statusEl.html('<span style="color:#595959">No active visit. Creating visit...</span>');
                         jq.ajax({
                             url: base + "/visit",
                             type: "POST",
@@ -210,18 +220,18 @@ jq(function(){
 
         var html =
             '<div id="' + rowId + '" style="margin-bottom:6px;padding:8px 10px;background:#fff;border:1px solid ' + levelColors.border + ';border-radius:4px">' +
-                '<div style="display:flex;align-items:center;gap:8px">' +
-                    '<div style="flex:1">' +
+                '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">' +
+                    '<div style="flex:1;min-width:60%">' +
                         '<div style="font-size:13px;font-weight:600;color:' + levelColors.text + '">' +
-                            orderDef.icon + ' ' + orderDef.label +
+                            '<span aria-hidden="true">' + orderDef.icon + '</span> ' + orderDef.label +
                         '</div>' +
-                        '<div style="font-size:11px;color:#666;margin-top:2px;font-weight:400">' + orderDef.sublabel + '</div>' +
+                        '<div style="font-size:11px;color:#595959;margin-top:2px;font-weight:400">' + orderDef.sublabel + '</div>' +
                     '</div>' +
-                    '<button id="' + btnId + '" style="background:' + levelColors.btnBg + ';color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">' +
-                        '&#x2295; Place Order' +
+                    '<button id="' + btnId + '" class="mash-action" style="background:' + levelColors.btnBg + ';color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">' +
+                        '<span aria-hidden="true">&#x2295;</span> Place Order' +
                     '</button>' +
                 '</div>' +
-                '<div id="' + statusId + '" style="margin-top:5px;font-size:12px"></div>' +
+                '<div id="' + statusId + '" role="status" style="margin-top:5px;font-size:12px"></div>' +
             '</div>';
 
         return { html: html, statusId: statusId, btnId: btnId, def: orderDef };
@@ -261,7 +271,7 @@ jq(function(){
     // attribution rather than as a free-floating obs (#8, #29). ----
     function recordDeferral(statusEl, opts, onSuccess){
         opts = opts || {};
-        statusEl.html('<span style="color:#888">Recording...</span>');
+        statusEl.html('<span style="color:#595959">Recording...</span>');
         var fail = function(msg){
             statusEl.html('<span style="color:#c62828">' + (msg || 'Could not record the deferral.') + '</span>');
         };
@@ -359,10 +369,10 @@ jq(function(){
                 if(today.getTime() >= dueMid.getTime()){
                     statusEl.html('<span style="color:#b71c1c;font-weight:600">&#x26A0; Follow-up due (was ' + dueDate.toLocaleDateString() + ', deferred ' + deferredOn + reasonTxt + ')</span>');
                 } else {
-                    statusEl.html('<span style="color:#777">&#x23F8; Deferred until ' + dueDate.toLocaleDateString() + reasonTxt + '</span>');
+                    statusEl.html('<span style="color:#616161">&#x23F8; Deferred until ' + dueDate.toLocaleDateString() + reasonTxt + '</span>');
                 }
             } else {
-                statusEl.html('<span style="color:#777">&#x23F8; Deferred on ' + deferredOn + reasonTxt + '</span>');
+                statusEl.html('<span style="color:#616161">&#x23F8; Deferred on ' + deferredOn + reasonTxt + '</span>');
             }
         });
 
@@ -375,8 +385,9 @@ jq(function(){
             link.css({"pointer-events":"none","opacity":"0.5"});
             form.hide();
             recordDeferral(statusEl, { reason: reason, followupDate: followupDate }, function(){
-                statusEl.html('<span style="color:#777;font-weight:600">&#x23F8; Follow-up deferred until ' + d.toLocaleDateString() + '</span>');
+                statusEl.html('<span style="color:#616161;font-weight:600">&#x23F8; Follow-up deferred until ' + d.toLocaleDateString() + '</span>');
                 link.hide();
+                statusEl.attr("tabindex", "-1").focus();   // #39: keep focus after the link hides
             });
         });
     }
@@ -609,7 +620,7 @@ jq(function(){
                 });
 
                 var html = '<div style="padding:8px;background:#f5f5f5;border-left:4px solid #999;border-radius:4px">' +
-                    '<strong style="color:#666">Missing Labs</strong><br>' +
+                    '<strong style="color:#595959">Missing Labs</strong><br>' +
                     '<span style="font-size:12px;color:#555">Missing: ' + missingNames + '</span>';
 
                 if(alreadyOrdered.length > 0){
@@ -617,15 +628,15 @@ jq(function(){
                 }
 
                 if(stillMissing.length > 0){
-                    html += '<br><br><button id="fib4-order-btn" style="background:#1a78c2;color:#fff;border:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">' +
-                        '&#x2295; Order Missing Labs</button>';
+                    html += '<br><br><button id="fib4-order-btn" class="mash-action" style="background:#1a78c2;color:#fff;border:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600">' +
+                        '<span aria-hidden="true">&#x2295;</span> Order Missing Labs</button>';
                 } else {
                     html += '<br><br><span style="color:#2e7d32;font-weight:600;font-size:13px">&#x2713; All labs already ordered &mdash; awaiting results</span>';
                 }
 
-                html += '<div id="fib4-order-status" style="margin-top:6px;font-size:12px"></div></div>' +
+                html += '<div id="fib4-order-status" role="status" style="margin-top:6px;font-size:12px"></div></div>' +
                     '<a href="/' + OPENMRS_CONTEXT_PATH + '/owa/mashmasld/index.html?patientId=' + patientUuid + '" ' +
-                    'style="display:block;margin-top:8px;color:#009384;font-weight:600;font-size:13px">Open Full Screening &rarr;</a>';
+                    'style="display:block;margin-top:8px;color:#00695c;font-weight:600;font-size:13px">Open Full Screening &rarr;</a>';
 
                 el.html(html);
 
@@ -635,7 +646,7 @@ jq(function(){
                 var btn = jq(this);
                 var status = jq("#fib4-order-status");
                 btn.prop("disabled", true).text("Ordering...");
-                status.html('<span style="color:#888">Checking session...</span>');
+                status.html('<span style="color:#595959">Checking session...</span>');
                 // Re-enable the button and show the error on any pre-order GET
                 // failure, so it can't wedge on "Ordering..." (#14).
                 var mlFail = function(msg){
@@ -657,7 +668,7 @@ jq(function(){
                             return;
                         }
 
-                        status.html('<span style="color:#888">Checking for active visit...</span>');
+                        status.html('<span style="color:#595959">Checking for active visit...</span>');
                         jq.getJSON(base + "/visit?patient=" + patientUuid + "&includeInactive=false&v=default", function(visitData){
                             var visitUuid = null;
                             if(visitData.results && visitData.results.length > 0){
@@ -695,11 +706,11 @@ jq(function(){
                             if(visitUuid){
                                 encounterPayload.visit = visitUuid;
                             } else {
-                                status.html('<span style="color:#888">No active visit. Creating visit...</span>');
+                                status.html('<span style="color:#595959">No active visit. Creating visit...</span>');
                             }
 
                             var placeOrders = function(encPayload){
-                                status.html('<span style="color:#888">Placing orders...</span>');
+                                status.html('<span style="color:#595959">Placing orders...</span>');
                                 jq.ajax({
                                     url: base + "/encounter",
                                     type: "POST",
@@ -712,6 +723,7 @@ jq(function(){
                                             '<span style="color:#555;font-size:11px">Ordered: ' + orderedNames + '</span>'
                                         );
                                         btn.hide();
+                                        status.attr("tabindex", "-1").focus();   // #39: keep focus after the button hides
                                     },
                                     error: function(xhr){
                                         var msg = "Order failed.";
@@ -749,8 +761,8 @@ jq(function(){
                 }).fail(function(){ mlFail("Could not read your session."); });
                 });
             }).fail(function(){
-                el.html('<div style="padding:10px;color:#999;font-size:13px">Could not check existing lab orders. ' +
-                    '<a href="#" id="fib4-ordercheck-retry" style="color:#009384;font-weight:600">Retry</a></div>');
+                el.html('<div role="alert" style="padding:10px;color:#616161;font-size:13px">Could not check existing lab orders. ' +
+                    '<button type="button" id="fib4-ordercheck-retry" class="mash-linkbtn" style="font-weight:600">Retry</button></div>');
                 jq("#fib4-ordercheck-retry").on("click", function(e){ e.preventDefault(); loadLabsAndRender(); });
             });
 
@@ -763,7 +775,7 @@ jq(function(){
         var ageNum = validPositive(age);
         if(ageNum === null){
             el.html('<div style="padding:10px;background:#f5f5f5;border-left:4px solid #999;border-radius:4px">' +
-                '<strong style="color:#666">FIB-4 unavailable</strong><br>' +
+                '<strong style="color:#595959">FIB-4 unavailable</strong><br>' +
                 '<span style="font-size:12px;color:#555">Patient age is required to compute FIB-4.</span></div>');
             return;
         }
@@ -787,7 +799,7 @@ jq(function(){
         var fib4 = (age * ast) / (plat * Math.sqrt(alt));
         if(!isFinite(fib4)){
             el.html('<div style="padding:10px;background:#f5f5f5;border-left:4px solid #999;border-radius:4px">' +
-                '<strong style="color:#666">FIB-4 not interpretable</strong><br>' +
+                '<strong style="color:#595959">FIB-4 not interpretable</strong><br>' +
                 '<span style="font-size:12px;color:#555">Lab values are out of range for a FIB-4 calculation.</span></div>');
             return;
         }
@@ -814,7 +826,7 @@ jq(function(){
                 '<strong style="color:#455a64">FIB-4 not shown &mdash; no documented screening indication</strong><br>' +
                 '<span style="font-size:12px;color:#555">MASLD/FIB-4 screening targets type 2 diabetes, hepatic steatosis, &ge;2 metabolic risk factors, or persistently elevated liver enzymes.' +
                 (indication.factors.length ? ' Found: ' + indication.factors.join(", ") + '.' : '') + '</span><br>' +
-                '<a href="#" id="fib4-attest" style="font-size:12px;color:#009384;font-weight:600">Assess anyway (attest indication)</a>' +
+                '<button type="button" id="fib4-attest" class="mash-linkbtn" style="font-size:12px;font-weight:600">Assess anyway (attest indication)</button>' +
                 '</div>');
             jq("#fib4-attest").on("click", function(e){ e.preventDefault(); indicationAttested = true; loadLabsAndRender(); });
             return;
@@ -850,7 +862,7 @@ jq(function(){
         persistFib4(fib4, levelKey, indicationLabel);   // #23/#36: score + category + indication (deduped)
 
         var ageNote = (age != null && age >= 65)
-            ? '<span style="font-size:11px;color:#777"> (age &ge;65: low/intermediate cutoff = ' + lowerCutoff.toFixed(1) + ')</span>'
+            ? '<span style="font-size:11px;color:#616161"> (age &ge;65: low/intermediate cutoff = ' + lowerCutoff.toFixed(1) + ')</span>'
             : '';
         var indicationNote =
             '<div style="font-size:11px;color:#607d8b;margin-top:2px">Indication: ' + indicationLabel + '</div>';
@@ -867,7 +879,7 @@ jq(function(){
             etiologyNote = '<div style="font-size:11px;color:#2e7d32;margin-top:2px">&#x2713; MASLD &mdash; competing etiologies excluded (' + etiology.label + ').</div>';
         } else {
             etiologyNote = '<div style="font-size:11px;color:#bf360c;margin-top:2px">&#x26A0; MASLD provisional &mdash; competing etiologies (alcohol / HBV / HCV / autoimmune) not excluded. ' +
-                '<a href="#" id="fib4-etiology-attest" style="color:#009384;font-weight:600">Mark excluded (MASLD)</a></div>';
+                '<button type="button" id="fib4-etiology-attest" class="mash-linkbtn" style="font-weight:600">Mark excluded (MASLD)</button></div>';
         }
 
         // ---- Risk-level order actions ----
@@ -875,8 +887,8 @@ jq(function(){
         var riskActionsHtml = "";
         var deferLinkHtml =
             '<div style="margin-top:4px">' +
-            '<a href="#" id="fib4-defer-link" style="font-size:11px;color:#777;text-decoration:underline">Not now &mdash; defer follow-up</a>' +
-            ' <span id="fib4-defer-status" style="font-size:11px;margin-left:6px"></span>' +
+            '<button type="button" id="fib4-defer-link" class="mash-linkbtn" style="font-size:11px;color:#616161">Not now &mdash; defer follow-up</button>' +
+            ' <span id="fib4-defer-status" role="status" style="font-size:11px;margin-left:6px"></span>' +
             '<div id="fib4-defer-form" style="display:none;margin-top:6px;font-size:11px;color:#555">' +
                 '<label style="display:block;margin-bottom:3px">Reason ' +
                     '<select id="fib4-defer-reason" style="font-size:11px">' +
@@ -959,7 +971,7 @@ jq(function(){
             '<div style="padding:10px;background:'+bg+';border-left:4px solid '+color+';border-radius:4px">' +
             '<strong style="color:'+color+';font-size:20px">'+fib4.toFixed(2)+'</strong> ' +
             '<span style="color:'+color+';font-weight:600">'+level+'</span>' + ageNote + '<br>' +
-            '<span style="font-size:12px;color:#666">FIB-4 = ('+age+' &times; '+ast+') / ('+plat+' &times; &radic;'+alt+')</span>' +
+            '<span style="font-size:12px;color:#595959">FIB-4 = ('+age+' &times; '+ast+') / ('+plat+' &times; &radic;'+alt+')</span>' +
             labDateNote +
             indicationNote +
             ageCaution +
@@ -967,7 +979,7 @@ jq(function(){
             '</div>' +
             riskActionsHtml +
             '<a href="/' + OPENMRS_CONTEXT_PATH + '/owa/mashmasld/index.html?patientId=' + patientUuid + '" ' +
-            'style="display:block;margin-top:8px;color:#009384;font-weight:600;font-size:13px">View Full MASLD Screening &rarr;</a>'
+            'style="display:block;margin-top:8px;color:#00695c;font-weight:600;font-size:13px">View Full MASLD Screening &rarr;</a>'
         );
 
         // Wire up risk-action buttons after they are in the DOM
@@ -976,7 +988,7 @@ jq(function(){
         // #22: record a "competing etiologies excluded — MASLD" determination.
         jq("#fib4-etiology-attest").on("click", function(e){
             e.preventDefault();
-            jq(this).replaceWith('<span style="color:#777">Recording&hellip;</span>');
+            jq(this).replaceWith('<span style="color:#616161">Recording&hellip;</span>');
             jq.ajax({
                 url: base + "/obs", type: "POST", contentType: "application/json",
                 data: JSON.stringify({ person: patientUuid, concept: UUIDS.ETIOLOGY_DETERMINATION,
@@ -987,8 +999,8 @@ jq(function(){
     })
     .fail(function(){
         jq("#fib4-screening-widget").html(
-            '<div style="padding:10px;color:#999;font-size:13px">FIB-4 unavailable &mdash; could not load labs. ' +
-            '<a href="#" id="fib4-retry" style="color:#009384;font-weight:600">Retry</a></div>');
+            '<div role="alert" style="padding:10px;color:#616161;font-size:13px">FIB-4 unavailable &mdash; could not load labs. ' +
+            '<button type="button" id="fib4-retry" class="mash-linkbtn" style="font-weight:600">Retry</button></div>');
         jq("#fib4-retry").on("click", function(e){ e.preventDefault(); loadLabsAndRender(); });
     });
     }
