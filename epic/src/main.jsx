@@ -23,10 +23,10 @@ function render(client) {
 }
 
 // OpenMRS FHIR2 base, derived from the OWA's own path (…/<ctx>/owa/<app>/…) so it
-// works whatever the context path is.
+// works whatever the context path is. fhirclient requires an absolute URL.
 function openmrsFhirBase() {
   const ctx = window.location.pathname.split('/owa/')[0] || '/openmrs';
-  return ctx + '/ws/fhir2/R4';
+  return window.location.origin + ctx + '/ws/fhir2/R4';
 }
 
 FHIR.oauth2
