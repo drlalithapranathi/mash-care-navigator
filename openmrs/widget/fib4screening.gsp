@@ -1,4 +1,4 @@
-<!-- mash-fib4-widget 1.1.0 · patched into coreapps-1.34.0 · see openmrs/widget/VERSION (#28) -->
+<!-- mash-fib4-widget 1.1.1 · patched into coreapps-1.34.0 · see openmrs/widget/VERSION (#28) -->
 <style>
   /* #39: visible focus ring, ~44px touch targets, link-style buttons, AA colors */
   #fib4-screening-widget button:focus-visible,
@@ -928,6 +928,15 @@ jq(function(){
                    rowUs.html + rowEgd.html;
         }
 
+        // Collapse secondary content (surveillance orders + cardiometabolic) behind
+        // a toggle so a high-risk patient isn't a wall of cards by default (#40).
+        function moreSection(inner){
+            if(!inner) return "";
+            return '<div style="margin-top:6px">' +
+                '<button type="button" id="fib4-more-toggle" class="mash-linkbtn" style="font-size:11px">Show more &#x25B8;</button>' +
+                '<div id="fib4-more" style="display:none;margin-top:6px">' + inner + '</div></div>';
+        }
+
         if(levelKey === "low"){
             var soonRescreen = /diabet|metabolic|prediab|obes|overweight/i.test(indicationLabel || "");
             var rescreenYears = soonRescreen ? 2 : 3;
@@ -938,7 +947,7 @@ jq(function(){
                 '<div style="font-size:11px;font-weight:700;color:#1b5e20;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Low risk &middot; rescreen</div>' +
                 '<div style="font-size:12px;color:#333">Repeat FIB-4 in ' + rescreenYears + ' years' + (soonRescreen ? ' (sooner given metabolic risk)' : '') +
                 (dueStr ? ' &mdash; due ' + dueStr : '') + '.</div>' +
-                '</div>' + cardiometabolicHtml;
+                '</div>' + moreSection(cardiometabolicHtml);
         }
         else if(levelKey === "intermediate"){
             var colorsAmber = { border: "#ffb74d", text: "#bf360c", btnBg: "#e65100" };
@@ -953,8 +962,8 @@ jq(function(){
                 riskActionsRows.push(rowVcte, rowElf);
                 riskActionsHtml += rowVcte.html + rowElf.html;
             }
-            if(suspectCirrhosis) riskActionsHtml += surveillanceHtml(colorsAmber);
-            riskActionsHtml += restratNote + cardiometabolicHtml + deferLinkHtml + '</div>';
+            var moreAmber = (suspectCirrhosis ? surveillanceHtml(colorsAmber) : "") + cardiometabolicHtml;
+            riskActionsHtml += restratNote + moreSection(moreAmber) + deferLinkHtml + '</div>';
         }
         else if(levelKey === "high"){
             var colorsRed = { border: "#ef5350", text: "#b71c1c", btnBg: "#c62828" };
@@ -963,7 +972,7 @@ jq(function(){
             riskActionsHtml =
                 '<div style="margin-top:10px;padding:8px;background:#ffebee;border-left:3px solid #c62828;border-radius:4px">' +
                 '<div style="font-size:11px;font-weight:700;color:#b71c1c;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Urgent &middot; recommended action &middot; FIB-4 &gt;' + FIB4_UPPER + '</div>' +
-                rowConsult.html + surveillanceHtml(colorsRed) + restratNote + cardiometabolicHtml + deferLinkHtml +
+                rowConsult.html + restratNote + moreSection(surveillanceHtml(colorsRed) + cardiometabolicHtml) + deferLinkHtml +
                 '</div>';
         }
 
@@ -985,6 +994,12 @@ jq(function(){
         // Wire up risk-action buttons after they are in the DOM
         riskActionsRows.forEach(attachRiskAction);
         attachDeferLink();
+        // #40: expand/collapse the secondary (surveillance + cardiometabolic) section.
+        jq("#fib4-more-toggle").on("click", function(){
+            var m = jq("#fib4-more"), open = m.is(":visible");
+            m.toggle();
+            jq(this).html(open ? "Show more &#x25B8;" : "Show less &#x25BE;");
+        });
         // #22: record a "competing etiologies excluded — MASLD" determination.
         jq("#fib4-etiology-attest").on("click", function(e){
             e.preventDefault();
