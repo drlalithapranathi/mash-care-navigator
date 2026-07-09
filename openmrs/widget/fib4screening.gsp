@@ -1,4 +1,4 @@
-<!-- mash-fib4-widget 1.1.1 · patched into coreapps-1.34.0 · see openmrs/widget/VERSION (#28) -->
+<!-- mash-fib4-widget 1.1.2 · patched into coreapps-1.34.0 · see openmrs/widget/VERSION (#28) -->
 <style>
   /* #39: visible focus ring, ~44px touch targets, link-style buttons, AA colors */
   #fib4-screening-widget button:focus-visible,
@@ -844,10 +844,10 @@ jq(function(){
             var spanDays = Math.round((Math.max.apply(null, times) - Math.min.apply(null, times)) / 86400000);
             var ageDays  = Math.round((new Date().getTime() - Math.max.apply(null, times)) / 86400000);
             var warn = (spanDays > 180 || ageDays > 365);
+            if(!warn) return;   // #34/#40: only surface draw dates when something's off (stale / wide span)
             function fmt(d){ return d.toLocaleDateString(); }
             labDateNote =
-                '<div style="font-size:11px;color:' + (warn ? "#b71c1c" : "#777") + ';margin-top:2px">' +
-                (warn ? "&#x26A0; " : "") +
+                '<div style="font-size:11px;color:#b71c1c;margin-top:2px">&#x26A0; ' +
                 'Labs: AST ' + fmt(ds[0]) + ' &middot; ALT ' + fmt(ds[1]) + ' &middot; PLT ' + fmt(ds[2]) +
                 (spanDays > 180 ? ' &middot; drawn ' + spanDays + 'd apart' : "") +
                 (ageDays > 365 ? ' &middot; latest ' + ageDays + 'd old' : "") +
@@ -870,17 +870,19 @@ jq(function(){
         var ageCaution = (age < 35)
             ? '<div style="font-size:11px;color:#b71c1c;margin-top:2px">&#x26A0; FIB-4 is not validated under 35 &mdash; interpret with caution.</div>'
             : '';
-        // #22: qualify the MASLD label by competing-etiology status.
+        // #22/#40: keep only the strong "competing etiology" caveat in the headline
+        // card; the softer provisional/confirmed notes move into Show more.
         var etiology = determineEtiology(hbsagVal, hcvVal, alcoholVal, determVal);
-        var etiologyNote;
+        var etiologyCard = "", etiologyMore = "";
         if(etiology.status === "competing"){
-            etiologyNote = '<div style="font-size:11px;color:#b71c1c;margin-top:2px">&#x26A0; Competing etiology: ' + etiology.label + ' &mdash; read fibrosis as MetALD/ALD/viral, not MASLD.</div>';
+            etiologyCard = '<div style="font-size:11px;color:#b71c1c;margin-top:2px">&#x26A0; Competing etiology: ' + etiology.label + ' &mdash; read fibrosis as MetALD/ALD/viral, not MASLD.</div>';
         } else if(etiology.status === "masld"){
-            etiologyNote = '<div style="font-size:11px;color:#2e7d32;margin-top:2px">&#x2713; MASLD &mdash; competing etiologies excluded (' + etiology.label + ').</div>';
+            etiologyMore = '<div style="font-size:11px;color:#2e7d32;margin-top:2px">&#x2713; MASLD &mdash; competing etiologies excluded (' + etiology.label + ').</div>';
         } else {
-            etiologyNote = '<div style="font-size:11px;color:#bf360c;margin-top:2px">&#x26A0; MASLD provisional &mdash; competing etiologies (alcohol / HBV / HCV / autoimmune) not excluded. ' +
+            etiologyMore = '<div style="font-size:11px;color:#bf360c;margin-top:2px">&#x26A0; MASLD provisional &mdash; competing etiologies not excluded. ' +
                 '<button type="button" id="fib4-etiology-attest" class="mash-linkbtn" style="font-weight:600">Mark excluded (MASLD)</button></div>';
         }
+        var detailsHtml = indicationNote + etiologyMore;   // #40: indication + soft etiology into Show more
 
         // ---- Risk-level order actions ----
         var riskActionsRows = [];
@@ -947,7 +949,7 @@ jq(function(){
                 '<div style="font-size:11px;font-weight:700;color:#1b5e20;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Low risk &middot; rescreen</div>' +
                 '<div style="font-size:12px;color:#333">Repeat FIB-4 in ' + rescreenYears + ' years' + (soonRescreen ? ' (sooner given metabolic risk)' : '') +
                 (dueStr ? ' &mdash; due ' + dueStr : '') + '.</div>' +
-                '</div>' + moreSection(cardiometabolicHtml);
+                '</div>' + moreSection(detailsHtml + cardiometabolicHtml);
         }
         else if(levelKey === "intermediate"){
             var colorsAmber = { border: "#ffb74d", text: "#bf360c", btnBg: "#e65100" };
@@ -962,7 +964,7 @@ jq(function(){
                 riskActionsRows.push(rowVcte, rowElf);
                 riskActionsHtml += rowVcte.html + rowElf.html;
             }
-            var moreAmber = (suspectCirrhosis ? surveillanceHtml(colorsAmber) : "") + cardiometabolicHtml;
+            var moreAmber = detailsHtml + (suspectCirrhosis ? surveillanceHtml(colorsAmber) : "") + cardiometabolicHtml;
             riskActionsHtml += restratNote + moreSection(moreAmber) + deferLinkHtml + '</div>';
         }
         else if(levelKey === "high"){
@@ -972,7 +974,7 @@ jq(function(){
             riskActionsHtml =
                 '<div style="margin-top:10px;padding:8px;background:#ffebee;border-left:3px solid #c62828;border-radius:4px">' +
                 '<div style="font-size:11px;font-weight:700;color:#b71c1c;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Urgent &middot; recommended action &middot; FIB-4 &gt;' + FIB4_UPPER + '</div>' +
-                rowConsult.html + restratNote + moreSection(surveillanceHtml(colorsRed) + cardiometabolicHtml) + deferLinkHtml +
+                rowConsult.html + restratNote + moreSection(detailsHtml + surveillanceHtml(colorsRed) + cardiometabolicHtml) + deferLinkHtml +
                 '</div>';
         }
 
@@ -982,9 +984,8 @@ jq(function(){
             '<span style="color:'+color+';font-weight:600">'+level+'</span>' + ageNote + '<br>' +
             '<span style="font-size:12px;color:#595959">FIB-4 = ('+age+' &times; '+ast+') / ('+plat+' &times; &radic;'+alt+')</span>' +
             labDateNote +
-            indicationNote +
             ageCaution +
-            etiologyNote +
+            etiologyCard +
             '</div>' +
             riskActionsHtml +
             '<a href="/' + OPENMRS_CONTEXT_PATH + '/owa/mashmasld/index.html?patientId=' + patientUuid + '" ' +
