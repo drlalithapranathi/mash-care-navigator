@@ -3,13 +3,15 @@
  * Supports both EHR-launch (Epic/Cerner) and Standalone launch contexts.
  */
 
-// LOINC codes for required labs
-const LOINC = {
-  AST: ['1920-8', '30239-8'],
-  ALT: ['1742-6', '76625-3'],
-  PLATELETS: ['777-3', '26515-7', '74775-7'],
-  HBA1C: ['4548-4', '17855-8', '59261-8'],
-  BMI: ['39156-5'],
+// Codes for required labs. `loinc` is used by Epic/Cerner; `openmrs` are this
+// deployment's concept UUIDs — OpenMRS FHIR2 exposes obs under the concept's own
+// (system-less) code rather than a LOINC coding, so we query by UUID too.
+const LABS = {
+  AST:       { loinc: ['1920-8', '30239-8'],            openmrs: ['5914052f-e777-4efc-949b-0dee321ae55f'] },
+  ALT:       { loinc: ['1742-6', '76625-3'],            openmrs: ['29a09214-cfd4-4db9-898e-f2a3e6f08feb'] },
+  PLATELETS: { loinc: ['777-3', '26515-7', '74775-7'],  openmrs: ['8575950e-90bf-4530-9595-deebbdf2cdde'] },
+  HBA1C:     { loinc: ['4548-4', '17855-8', '59261-8'], openmrs: ['b1c56e95-075a-47f3-8712-100c4d9efe1d'] },
+  BMI:       { loinc: ['39156-5'],                      openmrs: ['4448c907-7fed-416c-9871-541b6c3b72b1'] },
 };
 
 /** Build date cutoff string (n months ago) */
@@ -92,20 +94,29 @@ function pickLatest(bundle) {
  *     several EHRs (Epic) to return Observation results.
  *   - Never rely on `_sort=-date`; fetch a window and sort client-side.
  */
-async function fetchLatestObs(client, loincs, category, cutoffMonths = 12) {
-  const code = loincs.map((c) => `http://loinc.org|${c}`).join(',');
+async function fetchLatestObs(client, codes, category, cutoffMonths = 12) {
+  const loincCode = (codes.loinc || []).map((c) => `http://loinc.org|${c}`).join(',');
+  const uuidCode = (codes.openmrs || []).join(',');
   const since = monthsAgo(cutoffMonths);
   const cat = category ? `&category=${category}` : '';
 
-  const queries = [
-    // Full: category + date window + status OR-list, a page wide enough that the
-    // window's latest is present, then sorted client-side.
-    `Observation?code=${code}${cat}&date=ge${since}&status=final,amended,corrected&_count=100`,
-    // Drop status (some servers reject the token OR-list).
-    `Observation?code=${code}${cat}&date=ge${since}&_count=100`,
-    // Drop category + date window (most permissive).
-    `Observation?code=${code}&_count=100`,
-  ];
+  const queries = [];
+  // Epic/Cerner: LOINC-coded. Full → drop status → drop category+date.
+  if (loincCode) {
+    queries.push(
+      `Observation?code=${loincCode}${cat}&date=ge${since}&status=final,amended,corrected&_count=100`,
+      `Observation?code=${loincCode}${cat}&date=ge${since}&_count=100`,
+      `Observation?code=${loincCode}&_count=100`
+    );
+  }
+  // OpenMRS FHIR2: obs carry the concept's own (system-less) code, not LOINC, and
+  // a mixed LOINC-or-UUID OR-list matches nothing — so query the UUIDs on their own.
+  if (uuidCode) {
+    queries.push(
+      `Observation?code=${uuidCode}${cat}&_count=100`,
+      `Observation?code=${uuidCode}&_count=100`
+    );
+  }
 
   for (const q of queries) {
     try {
@@ -188,11 +199,11 @@ export async function fetchPatientData(client) {
   // Fetch all required labs in parallel. Category steers the Observation search:
   // liver labs + HbA1c are `laboratory`; BMI is `vital-signs`.
   const [ast, alt, platelets, hba1c, bmi] = await Promise.all([
-    fetchLatestObs(client, LOINC.AST, 'laboratory'),
-    fetchLatestObs(client, LOINC.ALT, 'laboratory'),
-    fetchLatestObs(client, LOINC.PLATELETS, 'laboratory'),
-    fetchLatestObs(client, LOINC.HBA1C, 'laboratory', 12),
-    fetchLatestObs(client, LOINC.BMI, 'vital-signs', 12),
+    fetchLatestObs(client, LABS.AST, 'laboratory'),
+    fetchLatestObs(client, LABS.ALT, 'laboratory'),
+    fetchLatestObs(client, LABS.PLATELETS, 'laboratory'),
+    fetchLatestObs(client, LABS.HBA1C, 'laboratory', 12),
+    fetchLatestObs(client, LABS.BMI, 'vital-signs', 12),
   ]);
 
   return {
